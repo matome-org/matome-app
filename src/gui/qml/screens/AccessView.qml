@@ -36,7 +36,7 @@ DetailTab {
     readonly property var selectedRow: table.selectedRow
     readonly property string placeName: Messages.placeName(view.kind, Session.accessGrants.name, "")
     readonly property bool ready: Session.accessGrants.active && !Session.accessGrants.busy
-    readonly property bool inheritable: view.kind === "folder" || view.kind === "document"
+    readonly property bool inheritable: view.kind === "item"
     readonly property bool broken: (Session.accessGrants.summary.inheritance ?? "") !== ""
     readonly property bool givenHere: view.selectedRows.length > 0 && view.selectedRows.every(function (row) {
         return !row.inherited && row.roleIds.length > 0

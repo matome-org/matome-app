@@ -368,12 +368,11 @@ function memberImpact(rows, groups, assigned) {
 function placeName(kind, name, spaceName) {
     const named = name !== "" ? name
                 : kind === "space" ? qsTr("A space")
-                : kind === "folder" ? qsTr("A folder")
-                : kind === "document" ? qsTr("A document") : qsTr("A tag")
-    return (kind === "folder" || kind === "document") && spaceName !== "" ? qsTr("%1 in %2").arg(named).arg(spaceName) : named
+                : kind === "item" ? qsTr("A file or folder") : qsTr("A tag")
+    return kind === "item" && spaceName !== "" ? qsTr("%1 in %2").arg(named).arg(spaceName) : named
 }
 
-// How a folder or document inherits access, by AccessGrants' `summary`.
+// How an item inherits access, by AccessGrants' `summary`.
 function inheritance(summary) {
     if (summary.inheritance === "restricted")
         return qsTr("Stopped: restricted")
@@ -414,7 +413,7 @@ function accessSource(row) {
     if (!row.inherited)
         return qsTr("Given here")
     const from = row.sourceKind === "space" ? qsTr("From the space %1").arg(placeName("space", row.sourceName, ""))
-                                            : qsTr("From the folder %1").arg(placeName("folder", row.sourceName, ""))
+                                            : qsTr("From the folder %1").arg(placeName("item", row.sourceName, ""))
     return row.scope === "manage" ? qsTr("%1 · manages access only").arg(from) : from
 }
 
@@ -808,7 +807,8 @@ function controlledFailure(code) {
     case "already_approved": return qsTr("You already approved this version. Another reviewer must approve it too.")
     case "invalid_settings": return qsTr("The server refused these settings. Check the allowed values and try again.")
     case "revision_conflict": return qsTr("The document, review, or space settings changed. Refresh and inspect the current state before trying again.")
-    case "revision_required": return qsTr("Refresh to obtain the current revision before saving.")
+    case "revision_required":
+    case "precondition_required": return qsTr("Refresh to obtain the current revision before saving.")
     case "published_version_required": return qsTr("Upload a Markdown version before managing this document with reviews.")
     case "diff_too_large": return qsTr("This diff exceeds the server limit. Download the proposal to inspect it.")
     case "candidate_unavailable": return qsTr("The proposal is unavailable. Refresh this review.")

@@ -278,8 +278,8 @@ FocusScope {
                         onBackRequested: explorer.closeAccess()
                         onPanelRequested: function (kind, from) { explorer.editAccess(kind, from) }
                         onSourceRequested: function (kind, id, name) {
-                            if (kind === "folder") {
-                                Session.accessGrants.open("folder", Session.accessGrants.spaceId, id, Messages.placeName(kind, name, ""))
+                            if (kind === "item") {
+                                Session.accessGrants.open("item", Session.accessGrants.spaceId, id, Messages.placeName(kind, name, ""))
                             } else {
                                 explorer.closeAccess()
                                 explorer.spaceSettingsRequested(id, name)
@@ -398,10 +398,10 @@ FocusScope {
         id: deletePanel
         ConfirmPanel {
             objectName: "deleteFolderPanel"
-            title: qsTr("Delete folder “%1”?").arg(explorer.deleting)
-            detail: qsTr("This cannot be undone.")
-            saveText: qsTr("Delete")
-            onConfirmed: Session.deleteFocusedFolder()
+            title: qsTr("Move folder “%1” to the trash?").arg(explorer.deleting)
+            detail: qsTr("The folder and everything in it go to the trash.")
+            saveText: qsTr("Move to trash")
+            onConfirmed: Session.trashFocusedFolder()
         }
     }
 

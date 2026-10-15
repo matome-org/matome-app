@@ -5,6 +5,7 @@
 #include "references/AssetImages.h"
 
 #include <QAccessible>
+#include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
@@ -15,9 +16,12 @@
 #include <QPointingDevice>
 #include <QQmlApplicationEngine>
 #include <QQmlExpression>
+#include <QQuickTextDocument>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSettings>
+#include <QTextBlock>
+#include <QTextDocument>
 #include <QtQuickTest/quicktest.h>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -80,7 +84,14 @@ private slots:
     void keyboardDrivesTheExplorer();
     void tabReachesEveryRegion();
     void explorerOpensDocumentsOnlyWhenAsked();
-    void documentAsksInASidePanel();
+    void documentEditsInItsOwnMode();
+    void managedSaveProposesAChange();
+    void reviewShowsItsChanges();
+    void versionsCompare();
+    void previewRendersBlocks();
+    void previewScrollsAndSelects();
+    void previewTablesScrollAcross();
+    void editorSplitFollowsTheText();
     void relatedTabOpensLinkedDocuments();
     void f6CyclesRegions();
     void keyboardWalksTheTree();
@@ -177,7 +188,7 @@ private:
     void tapItem(QQuickItem *item, int holdMs = 0);
     void dropOn(QQuickItem *item, QMimeData *mime, const std::function<void()> &midDrag = {});
     void dragOnto(QQuickItem *from, QQuickItem *onto);
-    void wheelOn(QQuickItem *item);
+    void wheelOn(QQuickItem *item, QPoint angle = QPoint(0, -360), Qt::KeyboardModifiers modifiers = Qt::NoModifier);
     void settle();
     bool waitSignedIn(bool wanted);
     bool waitIdle();
@@ -187,6 +198,7 @@ private:
     bool createSpace(const QString &name);
     void openSpace(const QString &name);
     void addFolder(const QString &name);
+    void openManaged(const QString &name, const QByteArray &body);
 
     QTemporaryDir m_home;
     FakeCore m_core;
@@ -530,12 +542,12 @@ void TestStudio::dragOnto(QQuickItem *from, QQuickItem *onto)
 
 // One notch-burst of the mouse wheel down over the item's centre, stamped
 // after the pointer events before it, as a real wheel would be.
-void TestStudio::wheelOn(QQuickItem *item)
+void TestStudio::wheelOn(QQuickItem *item, QPoint angle, Qt::KeyboardModifiers modifiers)
 {
     QVERIFY(item);
     settle();
     const QPointF centre = centreOf(item);
-    QWheelEvent wheel(centre, centre, QPoint(), QPoint(0, -360), Qt::NoButton, Qt::NoModifier,
+    QWheelEvent wheel(centre, centre, QPoint(), angle, Qt::NoButton, modifiers,
                       Qt::NoScrollPhase, false);
     QTest::lastMouseTimestamp += 500;
     wheel.setTimestamp(QTest::lastMouseTimestamp);
@@ -634,6 +646,40 @@ void TestStudio::addFolder(const QString &name)
     m_session->createHere(name);
     QTRY_COMPARE(m_session->entries()->rowCount(), before + 1);
     QVERIFY(waitIdle());
+}
+
+// Uploads `name` to a new space Quality where reviews are on, opens it,
+// and manages it with reviews.
+void TestStudio::openManaged(const QString &name, const QByteArray &body)
+{
+    openSpace(QStringLiteral("Quality"));
+    const QString orgId = m_session->currentOrgId(), spaceId = m_session->currentSpaceId();
+    m_session->uploadUrls({scratchFile(name, body)});
+    QTRY_VERIFY(!m_core.landed(name).isEmpty());
+    QTRY_VERIFY(!m_session->uploadBusy());
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")}, {QStringLiteral("skus"), QJsonArray()}});
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("revision"), 1}}}}});
+    m_core.seedActivation(spaceId, QStringLiteral("controlled_docs"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("ok@localhost"), QStringLiteral("content_contributor"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("ok@localhost"), QStringLiteral("addon.controlled_docs.manager"));
+    m_session->addOns()->refresh();
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    m_session->runCommand(QStringLiteral("refresh"));
+    QVERIFY(waitIdle());
+    m_session->openEntry(QStringLiteral("document"), entryId(name));
+    QTRY_VERIFY(m_session->documentView()->active());
+    QTRY_VERIFY(m_session->controlledDocs()->active());
+    QTRY_VERIFY(!m_session->controlledDocs()->busy());
+    QTRY_VERIFY(propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
+    QVERIFY(!shown(QStringLiteral("documentTab_reviews")));
+    clickItem(waitItem(QStringLiteral("manage-documentButton")));
+    QTRY_VERIFY(m_session->controlledDocs()->controlled());
+    QTRY_VERIFY(!m_session->controlledDocs()->busy());
+    QTRY_VERIFY(shown(QStringLiteral("documentTab_reviews")));
 }
 
 void TestStudio::themeRolesStayReadable()
@@ -1288,9 +1334,10 @@ void TestStudio::explorerOpensDocumentsOnlyWhenAsked()
     QTRY_VERIFY(itemNamed(QStringLiteral("explorer"))->isVisible());
 }
 
-// Leaving, discarding, and saving an edit ask in a side panel beside the
-// editor; Esc steps back out of it and keeps the edit.
-void TestStudio::documentAsksInASidePanel()
+// E opens the editor in place of the document page; Esc with changes asks
+// in a side panel whether to save, discard, or keep editing. Ctrl+S saves a
+// plain document as its next version at once, back on the preview.
+void TestStudio::documentEditsInItsOwnMode()
 {
     openSpace(QStringLiteral("Inbox"));
     m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("notes.md"), {}, QByteArray("# Notes\n"));
@@ -1301,41 +1348,647 @@ void TestStudio::documentAsksInASidePanel()
     QTRY_VERIFY(m_session->documentView()->active());
     QVERIFY(waitIdle());
     QTRY_VERIFY(m_session->documentView()->editable());
+    QTRY_VERIFY(shown(QStringLiteral("documentPage")));
+    QCOMPARE(propertyOf(QStringLiteral("documentPage"), "chips").toStringList(), QStringList{QStringLiteral("Version 1")});
+    QCOMPARE(propertyOf(QStringLiteral("documentBackButton"), "text").toString(), QStringLiteral("Inbox"));
+    QVERIFY(propertyOf(QStringLiteral("edit-documentButton"), "primary").toBool());
     settle();
-    key(Qt::Key_2);
-    QTRY_COMPARE(m_session->documentView()->tab(), QStringLiteral("edit"));
-    QQuickItem *editor = waitItem(QStringLiteral("documentEditor"));
-    QTRY_VERIFY(editor->isVisible() && editor->isEnabled());
-    focusOn(editor);
+    key(Qt::Key_E);
+    QTRY_VERIFY(m_session->documentView()->editing());
+    QTRY_VERIFY(shown(QStringLiteral("editPage")));
+    QVERIFY(!shown(QStringLiteral("documentPage")));
+    QTRY_COMPARE(focusName(), QStringLiteral("documentEditor"));
+    QVERIFY(!propertyOf(QStringLiteral("save-documentButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("save-documentButton"), "reason").toString(), QStringLiteral("Nothing has changed."));
     key(Qt::Key_End, Qt::ControlModifier);
     type(QStringLiteral("more"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("save-documentButton"), "usable").toBool());
 
+    // The text is fixed-width with spaced lines, in the reading column.
+    QQuickItem *editor = waitItem(QStringLiteral("documentEditor"));
+    QCOMPARE(editor->property("font").value<QFont>().family(), m_theme->editor().family());
+    QVERIFY(editor->width() <= m_theme->reading() + 2 * editor->property("leftPadding").toReal() + 0.5);
+    QTextDocument *document = editor->property("textDocument").value<QQuickTextDocument *>()->textDocument();
+    QTRY_COMPARE(document->firstBlock().blockFormat().lineHeight(), 160.0);
+    QTRY_COMPARE(document->lastBlock().blockFormat().lineHeight(), 160.0);
+
+    // The switch shows the draft rendered without leaving the editor, and
+    // back; Ctrl+1 to 3 pick the same modes.
+    QCOMPARE(propertyOf(QStringLiteral("editMode"), "current").toString(), QStringLiteral("write"));
+    clickItem(waitItem(QStringLiteral("editMode_preview")));
+    QTRY_VERIFY(shown(QStringLiteral("draftPreview")));
+    QVERIFY(!shown(QStringLiteral("documentEditor")));
+    QCOMPARE(propertyOf(QStringLiteral("editMode"), "current").toString(), QStringLiteral("preview"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("draftPreviewBlocks"), "count").toInt(), 2);
+    QVERIFY(!propertyOf(QStringLiteral("insert-imageButton"), "usable").toBool());
+    key(Qt::Key_1, Qt::ControlModifier);
+    QTRY_VERIFY(shown(QStringLiteral("documentEditor")));
+    QVERIFY(!shown(QStringLiteral("draftPreview")));
+    QTRY_COMPARE(focusName(), QStringLiteral("documentEditor"));
+    key(Qt::Key_2, Qt::ControlModifier);
+    QTRY_VERIFY(shown(QStringLiteral("draftPreview")));
+    focusOn(waitItem(QStringLiteral("editMode_preview")));
+    key(Qt::Key_Left);
+    QTRY_COMPARE(propertyOf(QStringLiteral("editMode"), "current").toString(), QStringLiteral("write"));
+    QTRY_VERIFY(shown(QStringLiteral("documentEditor")));
+
+    focusOn(waitItem(QStringLiteral("documentEditor")));
     key(Qt::Key_Escape);
-    QTRY_VERIFY(shown(QStringLiteral("documentAskPanel")));
     QTRY_VERIFY(panelOpen());
-    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Discard your changes?"));
-    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Discard and close"));
-    QTRY_COMPARE(focusName(), QStringLiteral("sidePanelCancel"));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Unsaved changes"));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Save"));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelOther"), "text").toString(), QStringLiteral("Discard"));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelCancel"), "text").toString(), QStringLiteral("Continue editing"));
+    QVERIFY(!shown(QStringLiteral("confirmReason")));
     key(Qt::Key_Escape);
-    QTRY_VERIFY(!shown(QStringLiteral("documentAskPanel")));
-    QVERIFY(m_session->documentView()->active());
+    QTRY_VERIFY(!panelOpen());
+    QVERIFY(m_session->documentView()->editing());
 
     key(Qt::Key_S, Qt::ControlModifier);
-    QTRY_VERIFY(panelOpen());
-    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Save a new version?"));
-    // The reason is optional here, and has focus.
-    QTRY_COMPARE(focusName(), QStringLiteral("confirmReason"));
-    QVERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
-    type(QStringLiteral("typo"));
-    clickItem(waitItem(QStringLiteral("sidePanelSave")));
-    QTRY_VERIFY(!shown(QStringLiteral("documentAskPanel")));
     QTRY_COMPARE(m_session->documentView()->notice(), QStringLiteral("version_published"));
+    QTRY_VERIFY(!m_session->documentView()->editing());
+    QVERIFY(!panelOpen());
+    QTRY_VERIFY(shown(QStringLiteral("documentPage")));
+    QVERIFY(waitIdle());
+    QTRY_COMPARE(propertyOf(QStringLiteral("documentPage"), "chips").toStringList(), QStringList{QStringLiteral("Version 2")});
+    QTRY_COMPARE(m_session->documentView()->text(), QStringLiteral("# Notes\nmore"));
+
+    // Discard leaves the published text as it was.
+    key(Qt::Key_E);
+    QTRY_VERIFY(m_session->documentView()->editing());
+    QTRY_COMPARE(focusName(), QStringLiteral("documentEditor"));
+    type(QStringLiteral(" again"));
+    clickItem(waitItem(QStringLiteral("discard-changesButton")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("sidePanelOther")));
+    QTRY_VERIFY(!m_session->documentView()->editing());
+    QTRY_VERIFY(!panelOpen());
+    QCOMPARE(m_session->documentView()->text(), QStringLiteral("# Notes\nmore"));
+
+    // The way back asks too, and its Save saves.
+    key(Qt::Key_E);
+    QTRY_COMPARE(focusName(), QStringLiteral("documentEditor"));
+    QCOMPARE(propertyOf(QStringLiteral("documentEditor"), "text").toString(), QStringLiteral("# Notes\nmore"));
+    key(Qt::Key_End, Qt::ControlModifier);
+    type(QStringLiteral("!"));
+    clickItem(waitItem(QStringLiteral("editBackButton")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!m_session->documentView()->editing());
+    QTRY_VERIFY(!panelOpen());
+    QVERIFY(waitIdle());
+    QTRY_COMPARE(m_session->documentView()->text(), QStringLiteral("# Notes\nmore!"));
+    // Unchanged, the editor closes without asking.
+    key(Qt::Key_E);
+    QTRY_VERIFY(m_session->documentView()->editing());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->documentView()->editing());
+    QVERIFY(!panelOpen());
     key(Qt::Key_Escape);
     QTRY_VERIFY(!m_session->documentView()->active());
 }
 
-// 4 shows what links the document and what it links; Enter on a source
-// opens it, and a broken link is listed but dimmed.
+// A managed document's save proposes the change: a side panel takes the
+// comment the review starts with. The document then says a review is open,
+// with its approvals, and Open review opens it from the preview.
+void TestStudio::managedSaveProposesAChange()
+{
+    window()->resize(1200, 900);
+    openManaged(QStringLiteral("plan.md"), "# Plan\n");
+    QTRY_VERIFY(propertyOf(QStringLiteral("documentPage"), "chips").toStringList().contains(QStringLiteral("Managed")));
+    QVERIFY(!propertyOf(QStringLiteral("open-reviewButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("open-reviewButton"), "reason").toString(), QStringLiteral("No review is open."));
+    QVERIFY(!shown(QStringLiteral("reviewState")));
+
+    QTRY_VERIFY(m_session->documentView()->editable());
+    clickItem(waitItem(QStringLiteral("edit-documentButton")));
+    QTRY_COMPARE(focusName(), QStringLiteral("documentEditor"));
+    QCOMPARE(propertyOf(QStringLiteral("save-documentButton"), "text").toString(), QStringLiteral("Propose change"));
+    key(Qt::Key_End, Qt::ControlModifier);
+    type(QStringLiteral("Scope"));
+    key(Qt::Key_S, Qt::ControlModifier);
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Propose change"));
+    QTRY_COMPARE(focusName(), QStringLiteral("confirmReason"));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    type(QStringLiteral("Add the scope"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Propose change"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_COMPARE(m_session->documentView()->notice(), QStringLiteral("review_requested"));
+    QTRY_VERIFY(!m_session->documentView()->editing());
+    QTRY_VERIFY(!panelOpen());
+    QTRY_COMPARE(m_session->documentView()->tab(), QStringLiteral("reviews"));
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!m_session->controlledDocs()->busy());
+    // The published text stays until the review is approved.
+    QCOMPARE(m_session->documentView()->text(), QStringLiteral("# Plan\n"));
+    QTRY_VERIFY(shown(QStringLiteral("review_review-1")));
+    QTRY_COMPARE(cell(QStringLiteral("review_review-1"), 0), QStringLiteral("Add the scope"));
+    QTRY_COMPARE(cell(QStringLiteral("review_review-1"), 3), QStringLiteral("0/1"));
+    QTRY_VERIFY(shown(QStringLiteral("reviewState")));
+    QCOMPARE(propertyOf(QStringLiteral("reviewState"), "text").toString(), QStringLiteral("Review open · 0/1 approvals"));
+    QVERIFY(propertyOf(QStringLiteral("documentPage"), "chips").toStringList().contains(QStringLiteral("Review open")));
+
+    key(Qt::Key_1);
+    QTRY_COMPARE(m_session->documentView()->tab(), QStringLiteral("view"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("open-reviewButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("open-reviewButton")));
+    QTRY_VERIFY(shown(QStringLiteral("reviewPage")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("reviewTitle"), "text").toString(), QStringLiteral("Add the scope"));
+    QCOMPARE(m_session->documentView()->tab(), QStringLiteral("reviews"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(shown(QStringLiteral("documentPage")));
+    QVERIFY(m_session->documentView()->active());
+}
+
+// A review opens on its Changes: the summary, the proposal against its
+// base rendered block by block, or as source side by side. N and P, or
+// Next change and Previous change, bring each change into view; a fold
+// opens with Enter. The Document tab renders the proposal, References lists
+// the links it adds. Reject and Approve each ask in a side panel; once
+// approved, every decision says the review is closed.
+void TestStudio::reviewShowsItsChanges()
+{
+    window()->resize(1200, 900);
+    QByteArray body("# Plan\n\n");
+    for (int at = 1; at <= 12; ++at)
+        body += QByteArray("Paragraph ") + QByteArray::number(at) + " stays as it is.\n\n";
+    body += "The review needs one approval.\n";
+    openManaged(QStringLiteral("plan.md"), body);
+    QString proposal = QString::fromUtf8(body);
+    proposal.replace(QStringLiteral("Paragraph 2 stays"), QStringLiteral("Paragraph two stays"));
+    proposal.replace(QStringLiteral("one approval"), QStringLiteral("two approvals"));
+    proposal += QStringLiteral("\nSee [the scope](/Specs/scope.md).\n");
+    auto *view = m_session->documentView();
+    auto *control = m_session->controlledDocs();
+    QTRY_VERIFY(view->editable());
+    m_session->runCommand(QStringLiteral("edit-document"));
+    view->save(proposal, QStringLiteral("Tighten the plan"), true, control->proposal());
+    QTRY_COMPARE(view->notice(), QStringLiteral("review_requested"));
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!control->busy());
+    QTRY_VERIFY(propertyOf(QStringLiteral("open-reviewButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("open-reviewButton")));
+    QTRY_VERIFY(shown(QStringLiteral("reviewPage")));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->base(), QString::fromUtf8(body));
+    QCOMPARE(propertyOf(QStringLiteral("reviewBackButton"), "text").toString(), QStringLiteral("plan.md"));
+    QCOMPARE(propertyOf(QStringLiteral("reviewPage"), "chips").toStringList(),
+             QStringList({QStringLiteral("Open"), QStringLiteral("Current"), QStringLiteral("0/1 approvals")}));
+    QCOMPARE(propertyOf(QStringLiteral("reviewPage"), "current").toString(), QStringLiteral("changes"));
+    QTRY_VERIFY(shown(QStringLiteral("reviewSummary")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("reviewSummary"), "text").toString(), QStringLiteral("+4 −2 · 1 section"));
+    // Every decision shows, each one that does not apply with its reason.
+    QVERIFY(!propertyOf(QStringLiteral("update-reviewButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("update-reviewButton"), "reason").toString(), QStringLiteral("Only its author updates it."));
+    QVERIFY(shown(QStringLiteral("resolve-conflictsButton")));
+
+    QQuickItem *rendered = waitItem(QStringLiteral("reviewRenderedBlocks"));
+    QTRY_VERIFY(rendered->property("count").toInt() > 0);
+    settle();
+    QCOMPARE(rendered->property("marked").toInt(), -1);
+    QVERIFY(!propertyOf(QStringLiteral("reviewPreviousChangeButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("reviewPreviousChangeButton"), "reason").toString(), QStringLiteral("This is the first change."));
+    const auto changeAt = [rendered] {
+        QQuickItem *content = rendered->property("contentItem").value<QQuickItem *>();
+        for (QQuickItem *child : content->childItems())
+            if (child->property("index").toInt() == rendered->property("marked").toInt() && !child->property("kind").toString().isEmpty())
+                return child->property("change").toString();
+        return QString();
+    };
+    key(Qt::Key_N);
+    QTRY_VERIFY(rendered->property("marked").toInt() > 0);
+    QTRY_VERIFY(rendered->hasActiveFocus());
+    QCOMPARE(changeAt(), QStringLiteral("changed"));
+    const int first = rendered->property("marked").toInt();
+    // The last change rewrites a paragraph and adds the one after it.
+    clickItem(waitItem(QStringLiteral("reviewNextChangeButton")));
+    QTRY_VERIFY(rendered->property("marked").toInt() > first);
+    QTRY_COMPARE(changeAt(), QStringLiteral("changed"));
+    QVERIFY(!propertyOf(QStringLiteral("reviewNextChangeButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("reviewNextChangeButton"), "reason").toString(), QStringLiteral("This is the last change."));
+    key(Qt::Key_P);
+    QTRY_COMPARE(rendered->property("marked").toInt(), first);
+    // The unchanged paragraphs between the changes fold into one row.
+    int fold = -1;
+    for (QQuickItem *child : rendered->property("contentItem").value<QQuickItem *>()->childItems())
+        if (child->property("kind").toString() == QLatin1String("fold") && child->property("count").toInt() > 1)
+            fold = child->property("index").toInt();
+    QVERIFY(fold > first);
+    const int rows = rendered->property("count").toInt();
+    QMetaObject::invokeMethod(rendered, "showIndex", Q_ARG(QVariant, fold));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(rendered->property("count").toInt() > rows);
+
+    QCOMPARE(propertyOf(QStringLiteral("reviewDiffMode"), "current").toString(), QStringLiteral("rendered"));
+    clickItem(waitItem(QStringLiteral("reviewDiffMode_source")));
+    QTRY_VERIFY(shown(QStringLiteral("reviewSource")));
+    QVERIFY(!shown(QStringLiteral("reviewRendered")));
+    QQuickItem *source = waitItem(QStringLiteral("reviewSource"));
+    QTRY_VERIFY(source->property("count").toInt() > 0);
+    key(Qt::Key_N);
+    QTRY_VERIFY(source->property("marked").toInt() >= 0);
+    QVERIFY(source->hasActiveFocus());
+    QCOMPARE(propertyOf(QStringLiteral("reviewDiffMode"), "current").toString(), QStringLiteral("source"));
+    focusOn(waitItem(QStringLiteral("reviewDiffMode_source")));
+    key(Qt::Key_Left);
+    QTRY_VERIFY(shown(QStringLiteral("reviewRendered")));
+    QCOMPARE(propertyOf(QStringLiteral("reviewDiffMode"), "current").toString(), QStringLiteral("rendered"));
+    QTRY_COMPARE(focusName(), QStringLiteral("reviewDiffMode_rendered"));
+
+    clickItem(waitItem(QStringLiteral("reviewTab_document")));
+    QTRY_VERIFY(shown(QStringLiteral("reviewCandidate")));
+    clickItem(waitItem(QStringLiteral("reviewTab_references")));
+    QTRY_VERIFY(shown(QStringLiteral("reference_added0")));
+    QCOMPARE(cell(QStringLiteral("reference_added0"), 0), QStringLiteral("the scope"));
+    QCOMPARE(cell(QStringLiteral("reference_added0"), 1), QStringLiteral("Added"));
+
+    clickItem(waitItem(QStringLiteral("reject-reviewButton")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Reject this proposal?"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!panelOpen());
+    QVERIFY(shown(QStringLiteral("reviewPage")));
+    clickItem(waitItem(QStringLiteral("approve-reviewButton")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Approve this proposal?"));
+    QTRY_COMPARE(focusName(), QStringLiteral("confirmReason"));
+    type(QStringLiteral("Clear"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!panelOpen());
+    QTRY_COMPARE(control->review().value(QStringLiteral("status")).toString(), QStringLiteral("approved"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("reviewPage"), "chips").toStringList(), QStringList({QStringLiteral("Approved")}));
+    for (const char *id : {"approve-reviewButton", "reject-reviewButton", "cancel-reviewButton"}) {
+        QVERIFY(shown(QString::fromLatin1(id)));
+        QVERIFY(!propertyOf(QString::fromLatin1(id), "usable").toBool());
+        QCOMPARE(propertyOf(QString::fromLatin1(id), "reason").toString(), QStringLiteral("This review is closed."));
+    }
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(shown(QStringLiteral("documentPage")));
+    QTRY_COMPARE(view->text(), proposal);
+}
+
+// Versions compares two versions picked in its table, or one with the
+// current version, on the same Changes as a review, without its decisions.
+void TestStudio::versionsCompare()
+{
+    openSpace(QStringLiteral("Inbox"));
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("notes.md"), {}, QByteArray("# Notes\n\nFirst words.\n"));
+    key(Qt::Key_F5);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!entryId(QStringLiteral("notes.md")).isEmpty());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("notes.md")));
+    auto *view = m_session->documentView();
+    QTRY_VERIFY(view->textLoaded());
+    for (const char *text : {"# Notes\n\nSecond words.\n", "# Notes\n\nSecond words.\n\nThird.\n"}) {
+        QTRY_VERIFY(view->editable());
+        m_session->runCommand(QStringLiteral("edit-document"));
+        view->save(QString::fromLatin1(text), {});
+        QTRY_COMPARE(view->notice(), QStringLiteral("version_published"));
+        QTRY_VERIFY(!view->busy());
+    }
+    QTRY_COMPARE(view->versions().size(), 3);
+    key(Qt::Key_2);
+    QTRY_COMPARE(view->tab(), QStringLiteral("versions"));
+    const QString newest = view->versions().at(0).toMap().value(QStringLiteral("id")).toString();
+    const QString oldest = view->versions().at(2).toMap().value(QStringLiteral("id")).toString();
+    QQuickItem *current = waitItem(QStringLiteral("version_") + newest);
+    clickItem(current);
+    QVERIFY(!propertyOf(QStringLiteral("versionCompareButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("versionCompareButton"), "reason").toString(),
+             QStringLiteral("Select an earlier version, or two versions."));
+    clickItem(waitItem(QStringLiteral("version_") + oldest), Qt::LeftButton, Qt::ControlModifier);
+    QTRY_VERIFY(propertyOf(QStringLiteral("versionCompareButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("versionCompareButton")));
+    QTRY_VERIFY(shown(QStringLiteral("comparePage")));
+    QVERIFY(!shown(QStringLiteral("documentPage")));
+    QCOMPARE(propertyOf(QStringLiteral("compareTitle"), "text").toString(), QStringLiteral("Version 1 → version 3"));
+    QCOMPARE(propertyOf(QStringLiteral("compareBackButton"), "text").toString(), QStringLiteral("notes.md"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("compareSummary"), "text").toString(), QStringLiteral("+3 −1 · 1 section"));
+    QVERIFY(!shown(QStringLiteral("approve-reviewButton")));
+    QVERIFY(!propertyOf(QStringLiteral("edit-documentButton"), "usable").toBool());
+    key(Qt::Key_N);
+    QTRY_VERIFY(propertyOf(QStringLiteral("compareRenderedBlocks"), "marked").toInt() >= 0);
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(shown(QStringLiteral("documentPage")));
+    QVERIFY(view->comparison().isEmpty());
+    QCOMPARE(view->tab(), QStringLiteral("versions"));
+    // One earlier version alone compares with the current one.
+    clickItem(waitItem(QStringLiteral("version_") + oldest));
+    clickItem(waitItem(QStringLiteral("versionCompareButton")));
+    QTRY_VERIFY(shown(QStringLiteral("comparePage")));
+    QCOMPARE(propertyOf(QStringLiteral("compareTitle"), "text").toString(), QStringLiteral("Version 1 → version 3"));
+    clickItem(waitItem(QStringLiteral("compareBackButton")));
+    QTRY_VERIFY(shown(QStringLiteral("documentPage")));
+}
+
+// A Markdown document renders block by block: headings, paragraphs,
+// tables, code, and images each in their own themed block in a column no
+// wider than the reading measure, and only the blocks in sight are built.
+void TestStudio::previewRendersBlocks()
+{
+    openSpace(QStringLiteral("Inbox"));
+    QByteArray markdown("# Guide\n\n---\n\nIntro with **bold** and [web](https://example.com).\n\n"
+                        "| Name | Size |\n|---|--:|\n| a | 1 |\n| b | 2 |\n\n```\nlet x = 1\n```\n\n"
+                        "![Logo](matome:asset/00000000-0000-4000-8000-000000000001?version=11111111-2222-3333-4444-555555555555)\n\n"
+                        "> Quoted\n\n- item\n\n");
+    for (int at = 1; at <= 120; ++at)
+        markdown += QByteArray("Paragraph ") + QByteArray::number(at) + " says enough to wrap across the column of the preview.\n\n";
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("guide.md"), {}, markdown);
+    key(Qt::Key_F5);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!entryId(QStringLiteral("guide.md")).isEmpty());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("guide.md")));
+    QTRY_VERIFY(m_session->documentView()->textLoaded());
+    QQuickItem *list = waitItem(QStringLiteral("documentPreviewBlocks"));
+    QVERIFY(list);
+    QTRY_COMPARE(list->property("count").toInt(), 128);
+    settle();
+    const auto built = [list] {
+        QList<QQuickItem *> blocks;
+        for (QQuickItem *child : list->property("contentItem").value<QQuickItem *>()->childItems())
+            if (child->isVisible() && !child->property("kind").toString().isEmpty())
+                blocks.append(child);
+        return blocks;
+    };
+    QVERIFY2(built().size() < 40, qPrintable(QString::number(built().size())));
+    QStringList kinds;
+    for (QQuickItem *block : built())
+        kinds << block->property("kind").toString();
+    for (const char *kind : {"heading", "paragraph", "table", "code", "image", "rule"})
+        QVERIFY2(kinds.contains(QString::fromLatin1(kind)), kind);
+    for (QQuickItem *block : built()) {
+        const QQuickItem *content = nullptr;
+        for (QQuickItem *child : block->childItems())
+            if (child->inherits("QQuickLoader")) content = child;
+        QVERIFY(content);
+        QVERIFY(content->width() <= m_theme->reading());
+        QVERIFY(content->height() > 0);
+        if (block->property("kind") == QLatin1String("image"))
+            QVERIFY(content->height() >= 60);
+        if (block->property("kind") == QLatin1String("heading"))
+            QCOMPARE(block->property("level").toInt(), 1);
+        if (block->property("quote").toInt() > 0)
+            QCOMPARE(block->property("html").toString(), QStringLiteral("Quoted"));
+        if (block->property("indent").toInt() > 0)
+            QCOMPARE(block->property("marker").toString(), QStringLiteral("•"));
+    }
+    // The heading's text is larger than the body's, the code monospace.
+    QQuickItem *heading = nullptr, *code = nullptr;
+    for (QQuickItem *item : descendants(list))
+        if (item->inherits("QQuickTextEdit")) {
+            if (item->property("text").toString().contains(QLatin1String("Guide"))) heading = item;
+            if (item->property("text").toString() == QLatin1String("let x = 1")) code = item;
+        }
+    QVERIFY(heading && code);
+    QVERIFY(heading->property("font").value<QFont>().pixelSize() > m_theme->bodyLarge().pixelSize());
+    QCOMPARE(code->property("font").value<QFont>().family(), m_theme->mono().family());
+    // Linked files live on the Related tab only.
+    QVERIFY(!itemNamed(QStringLiteral("linkedFiles")));
+}
+
+// The wheel scrolls the preview a constant step; the arrows, PageDown,
+// Home, and End scroll it too. A narrower window lays the blocks out again
+// with the top block kept in place. A drag selects across blocks, and
+// Ctrl+A then Ctrl+C copy the whole document's text.
+void TestStudio::previewScrollsAndSelects()
+{
+    openSpace(QStringLiteral("Inbox"));
+    QByteArray markdown("# Guide\n\nFirst paragraph.\n\nSecond paragraph.\n\n");
+    for (int at = 1; at <= 80; ++at)
+        markdown += QByteArray("Paragraph ") + QByteArray::number(at) + " says enough words to wrap across the reading column of the preview.\n\n";
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("long.md"), {}, markdown);
+    key(Qt::Key_F5);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!entryId(QStringLiteral("long.md")).isEmpty());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("long.md")));
+    QTRY_VERIFY(m_session->documentView()->textLoaded());
+    QQuickItem *view = waitItem(QStringLiteral("documentPreview"));
+    QQuickItem *list = waitItem(QStringLiteral("documentPreviewBlocks"));
+    QTRY_COMPARE(list->property("count").toInt(), 83);
+    settle();
+    const qreal step = list->property("step").toReal();
+    QVERIFY(step > 0);
+    const auto first = [list] { return list->property("originY").toReal() - list->property("topMargin").toReal(); };
+    const qreal top = list->property("contentY").toReal();
+    QCOMPARE(top, first());
+    wheelOn(list);
+    QTRY_COMPARE(list->property("contentY").toReal(), top + 3 * step);
+    wheelOn(list);
+    QTRY_COMPARE(list->property("contentY").toReal(), top + 6 * step);
+
+    // The top block stays on top across a relayout.
+    const auto topIndex = [list] {
+        QQuickItem *content = list->property("contentItem").value<QQuickItem *>();
+        const QPointF at = list->mapToItem(content, QPointF(list->width() / 2, list->property("topMargin").toReal() + 1));
+        int index = -1;
+        QMetaObject::invokeMethod(list, "indexAt", Q_RETURN_ARG(int, index), Q_ARG(qreal, at.x()), Q_ARG(qreal, at.y()));
+        return index;
+    };
+    const int before = topIndex();
+    QVERIFY(before > 0);
+    window()->resize(700, 760);
+    QTRY_COMPARE(view->property("settled").toReal(), view->width());
+    settle();
+    QCOMPARE(topIndex(), before);
+    window()->resize(1200, 760);
+    QTRY_COMPARE(view->property("settled").toReal(), view->width());
+    settle();
+    QCOMPARE(topIndex(), before);
+
+    focusOn(list);
+    key(Qt::Key_Home);
+    QTRY_COMPARE(list->property("contentY").toReal(), first());
+    QCOMPARE(topIndex(), 0);
+    key(Qt::Key_Down);
+    QTRY_VERIFY(list->property("contentY").toReal() > first());
+    key(Qt::Key_PageDown);
+    QTRY_VERIFY(list->property("contentY").toReal() > first() + list->height() / 2);
+    key(Qt::Key_End);
+    QTRY_VERIFY(topIndex() > 60);
+    key(Qt::Key_Home);
+    QTRY_COMPARE(list->property("contentY").toReal(), first());
+    QTRY_COMPARE(topIndex(), 0);
+    settle();
+
+    // A drag from the heading into the second paragraph selects across.
+    QQuickItem *heading = nullptr, *second = nullptr;
+    for (QQuickItem *item : descendants(list))
+        if (item->inherits("QQuickTextEdit")) {
+            if (item->property("text").toString().contains(QLatin1String("Guide"))) heading = item;
+            if (item->property("text").toString().contains(QLatin1String("Second paragraph"))) second = item;
+        }
+    QVERIFY(heading && second);
+    const QPoint from = heading->mapToScene(QPointF(1, heading->height() / 2)).toPoint();
+    const QPoint to = second->mapToScene(QPointF(24, second->height() / 2)).toPoint();
+    QTest::mousePress(window(), Qt::LeftButton, Qt::NoModifier, from);
+    for (int at = 1; at <= 5; ++at)
+        QTest::mouseMove(window(), from + (to - from) * at / 5);
+    QTest::mouseRelease(window(), Qt::LeftButton, Qt::NoModifier, to);
+    settle();
+    QVERIFY(!heading->property("selectedText").toString().isEmpty());
+    key(Qt::Key_C, Qt::ControlModifier);
+    const QString copied = QGuiApplication::clipboard()->text();
+    QVERIFY2(copied.startsWith(QStringLiteral("Guide\n\nFirst paragraph.\n\nS")), qPrintable(copied));
+    QVERIFY(!copied.contains(QStringLiteral("Second paragraph.")));
+    const QPointer<QQuickItem> kept = heading;
+    key(Qt::Key_Escape);
+    QVERIFY(m_session->documentView()->active());
+    QVERIFY(kept);
+    QTRY_VERIFY(heading->property("selectedText").toString().isEmpty());
+    key(Qt::Key_A, Qt::ControlModifier);
+    key(Qt::Key_C, Qt::ControlModifier);
+    QVERIFY(QGuiApplication::clipboard()->text().startsWith(QStringLiteral("Guide\n\nFirst paragraph.")));
+    QVERIFY(QGuiApplication::clipboard()->text().endsWith(QStringLiteral("Paragraph 80 says enough words to wrap across the reading column of the preview.")));
+}
+
+// A table wider than the reading column grows up to the page, then scrolls
+// across: Shift with the wheel, a wheel across, its scroll bar, and the
+// arrows once it has focus. No word breaks inside a cell.
+void TestStudio::previewTablesScrollAcross()
+{
+    window()->resize(1200, 800);
+    openSpace(QStringLiteral("Inbox"));
+    QByteArray markdown("# Plan\n\n| ");
+    const QList<QByteArray> heads{"Atomic work", "Responsible owner", "Estimated duration", "Dependencies",
+                                  "Acceptance criteria", "Verification method", "Risk assessment", "Deliverables",
+                                  "Remarks", "Interoperability", "Accountability", "Responsibilities",
+                                  "Prerequisites", "Characteristics"};
+    markdown += heads.join(" | ") + " |\n|" + QByteArray("---|").repeated(heads.size()) + "\n";
+    for (int row = 1; row <= 3; ++row)
+        markdown += QByteArray("| ").append(QByteArray("Several words wrap at their boundaries, never inside | ").repeated(heads.size())) + "\n";
+    markdown += "\nAfter the table.\n";
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("plan.md"), {}, markdown);
+    key(Qt::Key_F5);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!entryId(QStringLiteral("plan.md")).isEmpty());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("plan.md")));
+    QTRY_VERIFY(m_session->documentView()->textLoaded());
+    QQuickItem *table = waitItem(QStringLiteral("documentPreviewTable"));
+    QQuickItem *list = waitItem(QStringLiteral("documentPreviewBlocks"));
+    settle();
+    // Wider than the column, as wide as the page allows, and scrolling.
+    QVERIFY2(table->width() > m_theme->reading(), qPrintable(QString::number(table->width())));
+    QVERIFY(table->width() <= list->width());
+    const qreal left = table->mapToItem(list, QPointF(0, 0)).x();
+    QVERIFY(left >= 0 && left + table->width() <= list->width() + 0.5);
+    QVERIFY(table->property("contentWidth").toReal() > table->width());
+    QCOMPARE(table->property("contentX").toReal(), 0.0);
+    // Every cell wraps between words only.
+    int cells = 0;
+    for (QQuickItem *item : descendants(table))
+        if (item->inherits("QQuickTextEdit") && item->isVisible()) {
+            ++cells;
+            QVERIFY2(item->property("contentWidth").toReal() <= item->width() + 0.5,
+                     qPrintable(item->property("text").toString().right(60)));
+        }
+    QCOMPARE(cells, 4 * heads.size());
+
+    wheelOn(table, QPoint(0, -120), Qt::ShiftModifier);
+    QTRY_VERIFY(table->property("contentX").toReal() > 0);
+    const qreal shifted = table->property("contentX").toReal();
+    wheelOn(table, QPoint(-120, 0));
+    QTRY_VERIFY(table->property("contentX").toReal() > shifted);
+    // Neither scrolls the document down.
+    QCOMPARE(list->property("contentY").toReal(), list->property("originY").toReal() - list->property("topMargin").toReal());
+
+    focusOn(table);
+    key(Qt::Key_Home);
+    QTRY_COMPARE(table->property("contentX").toReal(), 0.0);
+    key(Qt::Key_Right);
+    QTRY_VERIFY(table->property("contentX").toReal() > 0);
+    key(Qt::Key_End);
+    QTRY_COMPARE(table->property("contentX").toReal(), table->property("contentWidth").toReal() - table->width());
+    key(Qt::Key_Home);
+    QTRY_COMPARE(table->property("contentX").toReal(), 0.0);
+
+    // Its scroll bar drags across over the blocks' own presses.
+    focusOn(list);
+    key(Qt::Key_End);
+    settle();
+    const QPoint grip = table->mapToScene(QPointF(8, table->height() - 4)).toPoint();
+    QTest::mousePress(window(), Qt::LeftButton, Qt::NoModifier, grip);
+    for (int at = 1; at <= 5; ++at)
+        QTest::mouseMove(window(), grip + QPoint(at * 30, 0));
+    QTest::mouseRelease(window(), Qt::LeftButton, Qt::NoModifier, grip + QPoint(150, 0));
+    QTRY_VERIFY(table->property("contentX").toReal() > 0);
+}
+
+// Split shows the editor beside the preview, which follows the typing a
+// moment later; scrolling either side brings the other to the same source
+// line. A narrow window has no room for Split.
+void TestStudio::editorSplitFollowsTheText()
+{
+    window()->resize(1400, 900);
+    openSpace(QStringLiteral("Inbox"));
+    QByteArray markdown("# Guide\n\n");
+    for (int at = 1; at <= 80; ++at)
+        markdown += QByteArray("Paragraph ") + QByteArray::number(at) + " says enough words to wrap across the reading column of the preview.\n\n";
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("long.md"), {}, markdown);
+    key(Qt::Key_F5);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!entryId(QStringLiteral("long.md")).isEmpty());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("long.md")));
+    QTRY_VERIFY(m_session->documentView()->editable());
+    settle();
+    key(Qt::Key_E);
+    QTRY_COMPARE(focusName(), QStringLiteral("documentEditor"));
+    key(Qt::Key_3, Qt::ControlModifier);
+    QTRY_COMPARE(propertyOf(QStringLiteral("editMode"), "current").toString(), QStringLiteral("split"));
+    QTRY_VERIFY(shown(QStringLiteral("draftPreview")));
+    QVERIFY(shown(QStringLiteral("documentEditor")));
+    QTRY_COMPARE(focusName(), QStringLiteral("documentEditor"));
+    QQuickItem *editor = waitItem(QStringLiteral("documentEditor"));
+    QQuickItem *preview = waitItem(QStringLiteral("draftPreview"));
+    QQuickItem *blocks = waitItem(QStringLiteral("draftPreviewBlocks"));
+    QTRY_COMPARE(blocks->property("count").toInt(), 81);
+    QVERIFY(editor->mapToScene(QPointF(editor->width(), 0)).x() <= preview->mapToScene(QPointF(0, 0)).x());
+
+    // Typing shows in the preview once it pauses.
+    key(Qt::Key_End, Qt::ControlModifier);
+    type(QStringLiteral("## Added"));
+    QTRY_COMPARE(blocks->property("count").toInt(), 82);
+
+    // The line at the editor's top is the line at the preview's top.
+    QQuickItem *page = flickableOf(editor);
+    QVERIFY(page);
+    const auto editorLine = [editor, page] {
+        int at = 0;
+        QMetaObject::invokeMethod(editor, "positionAt", Q_RETURN_ARG(int, at), Q_ARG(qreal, editor->property("leftPadding").toReal()),
+                                  Q_ARG(qreal, page->property("contentY").toReal() - editor->y()));
+        return editor->property("text").toString().left(at).count(QLatin1Char('\n')) + 1;
+    };
+    const auto previewLine = [preview] {
+        double line = 0;
+        QMetaObject::invokeMethod(preview, "topLine", Q_RETURN_ARG(double, line));
+        return line;
+    };
+    QMetaObject::invokeMethod(blocks, "positionViewAtBeginning");
+    page->setProperty("contentY", page->property("contentHeight").toReal() / 2);
+    QTRY_VERIFY(editorLine() > 40);
+    QTRY_VERIFY2(qAbs(previewLine() - editorLine()) < 3, qPrintable(QStringLiteral("%1 %2").arg(previewLine()).arg(editorLine())));
+    // Scrolled under the pointer, the preview leads.
+    QTest::mouseMove(window(), centreOf(blocks));
+    const qreal before = page->property("contentY").toReal();
+    wheelOn(blocks);
+    QTRY_VERIFY(page->property("contentY").toReal() > before);
+    QTRY_VERIFY2(qAbs(previewLine() - editorLine()) < 3, qPrintable(QStringLiteral("%1 %2").arg(previewLine()).arg(editorLine())));
+
+    window()->resize(500, 900);
+    QTRY_VERIFY(!propertyOf(QStringLiteral("editMode_split"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("editMode_split"), "reason").toString(), QStringLiteral("Split needs a wider window."));
+    QVERIFY(shown(QStringLiteral("documentEditor")));
+    QVERIFY(!shown(QStringLiteral("draftPreview")));
+    window()->resize(1400, 900);
+    clickItem(waitItem(QStringLiteral("discard-changesButton")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("sidePanelOther")));
+    QTRY_VERIFY(!m_session->documentView()->editing());
+}
+
+// 3 lists in one table what links the document and what it links; Enter
+// on a source opens it, and a broken link is listed but does not open.
 void TestStudio::relatedTabOpensLinkedDocuments()
 {
     openSpace(QStringLiteral("Inbox"));
@@ -1349,7 +2002,7 @@ void TestStudio::relatedTabOpensLinkedDocuments()
     const QString notes = entryId(QStringLiteral("notes.md")), plan = entryId(QStringLiteral("plan.md"));
     m_core.seedReferences(notes, {
         {QStringLiteral("incoming"), QJsonObject{{QStringLiteral("hidden_count"), 1}, {QStringLiteral("references"), QJsonArray{
-            QJsonObject{{QStringLiteral("document_id"), plan}, {QStringLiteral("title"), QStringLiteral("plan.md")},
+            QJsonObject{{QStringLiteral("item_id"), plan}, {QStringLiteral("name"), QStringLiteral("plan.md")},
                         {QStringLiteral("path"), QStringLiteral("/plan.md")}}}}}},
         {QStringLiteral("outgoing"), QJsonObject{{QStringLiteral("references"), QJsonArray{
             QJsonObject{{QStringLiteral("position"), 0}, {QStringLiteral("mode"), QStringLiteral("path")},
@@ -1359,29 +2012,26 @@ void TestStudio::relatedTabOpensLinkedDocuments()
     QTRY_VERIFY(m_session->documentView()->active());
     QVERIFY(waitIdle());
     settle();
-    key(Qt::Key_4);
+    key(Qt::Key_3);
     QTRY_COMPARE(m_session->documentView()->tab(), QStringLiteral("related"));
     QTRY_VERIFY(m_session->documentView()->relatedLoaded());
-    settle();
-    QQuickItem *source = itemNamed(QStringLiteral("incoming_0"));
-    QVERIFY(source && source->isVisible());
-    QCOMPARE(source->property("title").toString(), QStringLiteral("plan.md"));
-    QVERIFY(itemNamed(QStringLiteral("relatedHidden"))->isVisible());
-    QQuickItem *broken = itemNamed(QStringLiteral("outgoing_0"));
-    QVERIFY(broken);
-    QCOMPARE(broken->property("title").toString(), QStringLiteral("/gone.md"));
-    QCOMPARE(broken->property("detail").toString(), QStringLiteral("Nothing is at this path any more · By path"));
-    QVERIFY(broken->opacity() < 1);
-    QVERIFY(!itemNamed(QStringLiteral("relatedEmpty"))->isVisible());
-    itemNamed(QStringLiteral("incomingList"))->forceActiveFocus();
-    settle();
-    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("related_in0")));
+    QTRY_COMPARE(cell(QStringLiteral("related_in0"), 0), QStringLiteral("plan.md"));
+    QTRY_COMPARE(cell(QStringLiteral("related_in0"), 1), QStringLiteral("Linked from"));
+    QTRY_COMPARE(cell(QStringLiteral("related_out0"), 0), QStringLiteral("/gone.md"));
+    QTRY_COMPARE(cell(QStringLiteral("related_out0"), 1), QStringLiteral("Links to"));
+    QTRY_COMPARE(cell(QStringLiteral("related_out0"), 2), QStringLiteral("Nothing is at this path any more · By path"));
+    QVERIFY(shown(QStringLiteral("relatedHidden")));
+    QVERIFY(waitIdle());
+    clickItem(waitItem(QStringLiteral("related_out0")));
+    QTRY_VERIFY(!propertyOf(QStringLiteral("relatedOpenButton"), "usable").toBool());
+    QTRY_COMPARE(propertyOf(QStringLiteral("relatedOpenButton"), "reason").toString(), QStringLiteral("You cannot open this file"));
+    openRow(waitItem(QStringLiteral("related_in0")));
     QTRY_COMPARE(m_session->documentView()->documentId(), plan);
     QCOMPARE(m_session->documentView()->tab(), QStringLiteral("view"));
-    key(Qt::Key_4);
+    key(Qt::Key_3);
     QTRY_VERIFY(m_session->documentView()->relatedLoaded());
-    settle();
-    QVERIFY(itemNamed(QStringLiteral("relatedEmpty"))->isVisible());
+    QTRY_VERIFY(shown(QStringLiteral("related_empty")));
 }
 
 void TestStudio::tabReachesEveryRegion()
@@ -1689,7 +2339,7 @@ void TestStudio::dragAndDropMovesPayloads()
     dragOnto(waitRow(QStringLiteral("entryRow"), QStringLiteral("Budget")), waitItem(QStringLiteral("crumb1")));
     QTRY_COMPARE(m_session->entries()->rowCount(), 1);
     QVERIFY(waitIdle());
-    QVERIFY(m_core.documentTitled(QStringLiteral("Budget")).value(QStringLiteral("folder_id")).isNull());
+    QVERIFY(m_core.documentTitled(QStringLiteral("Budget")).value(QStringLiteral("parent_id")).isNull());
 }
 
 // Files from the desktop: the list offers itself while they hover, every
@@ -1725,7 +2375,7 @@ void TestStudio::droppedFilesUpload()
     QCOMPARE(m_core.landed(QStringLiteral("q1.txt")), FakeCore::sha256("first quarter"));
     QCOMPARE(m_core.landed(QStringLiteral("q2.txt")), FakeCore::sha256("second quarter"));
     QCOMPARE(m_core.landed(QStringLiteral("日本語.txt")), FakeCore::sha256("三番目"));
-    QCOMPARE(m_core.documentTitled(QStringLiteral("q2.txt")).value(QStringLiteral("folder_id")).toString(),
+    QCOMPARE(m_core.documentTitled(QStringLiteral("q2.txt")).value(QStringLiteral("parent_id")).toString(),
              reports);
     QCOMPARE(statusText(), QString());
 }
@@ -1833,8 +2483,8 @@ void TestStudio::uploadFailuresAreNamed()
         QVERIFY(m_core.landed(QLatin1String(fault.name)).isEmpty());
     }
     // A file named like something already here does not replace it.
-    m_session->uploadUrls({scratchFile(QStringLiteral("KEPT.txt"), "other")});
-    QTRY_COMPARE(statusText(), QStringLiteral("Could not upload “KEPT.txt”: something here already has that name."));
+    m_session->uploadUrls({scratchFile(QStringLiteral("kept.txt"), "other")});
+    QTRY_COMPARE(statusText(), QStringLiteral("Could not upload “kept.txt”: something here already has that name."));
     QTRY_VERIFY(!m_session->uploadBusy());
     QCOMPARE(m_core.landed(QStringLiteral("kept.txt")), FakeCore::sha256("kept"));
     key(Qt::Key_Backspace);
@@ -1897,10 +2547,10 @@ void TestStudio::uploadOffersReviews()
     QCOMPARE(focusName(), QStringLiteral("sidePanelSave"));
     key(Qt::Key_Return);
     QTRY_VERIFY(!shown(QStringLiteral("reviewUploadPanel")));
-    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("document")).toObject().value(QStringLiteral("controlled_docs_enabled")).toBool());
     QTRY_VERIFY(!m_session->uploadBusy());
     QTRY_VERIFY(rowProperty(QStringLiteral("entryRow"), QStringLiteral("plan.md"), "controlled").toBool());
-    QVERIFY(!m_core.documentTitled(QStringLiteral("notes.txt")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QVERIFY(!m_core.documentTitled(QStringLiteral("notes.txt")).value(QStringLiteral("document")).toObject().value(QStringLiteral("controlled_docs_enabled")).toBool());
     QCOMPARE(statusText(), QString());
 
     // Asked again every time, unchecked at first.
@@ -1911,7 +2561,7 @@ void TestStudio::uploadOffersReviews()
     clickItem(waitItem(QStringLiteral("sidePanelSave")));
     QTRY_VERIFY(!m_core.landed(QStringLiteral("loose.md")).isEmpty());
     QTRY_VERIFY(!m_session->uploadBusy());
-    QVERIFY(!m_core.documentTitled(QStringLiteral("loose.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QVERIFY(!m_core.documentTitled(QStringLiteral("loose.md")).value(QStringLiteral("document")).toObject().value(QStringLiteral("controlled_docs_enabled")).toBool());
 
     // Esc drops the files.
     m_session->uploadUrls({scratchFile(QStringLiteral("dropped.md"), "# Dropped\n")});
@@ -1936,13 +2586,14 @@ void TestStudio::uploadOffersReviews()
     QTRY_VERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("late.md")));
 }
 
-// Core refuses a name the place already holds, in any case and whether a
-// folder or a document holds it, and a name no disk could hold; the window
+// Core refuses a name another folder or document of the same kind already
+// holds there, spelled exactly, and a name no disk could hold; the window
 // says which and nothing changes.
 void TestStudio::refusedNamesSayWhy()
 {
     openSpace(QStringLiteral("Inbox"));
     addFolder(QStringLiteral("Drafts"));
+    addFolder(QStringLiteral("Archive"));
     m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("Notes"));
     key(Qt::Key_F5);
     QTRY_VERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Notes")));
@@ -1956,7 +2607,7 @@ void TestStudio::refusedNamesSayWhy()
         type(name);
         key(Qt::Key_Return);
     };
-    create(QStringLiteral("drafts"));
+    create(QStringLiteral("Drafts"));
     QTRY_COMPARE(statusText(), taken);
     QCOMPARE(propertyOf(QStringLiteral("explorerStatus"), "color").value<QColor>(), m_theme->failed());
     create(QStringLiteral(".."));
@@ -1971,12 +2622,12 @@ void TestStudio::refusedNamesSayWhy()
         type(name);
         key(Qt::Key_Return);
     };
-    rename(QStringLiteral("NOTES"));
+    rename(QStringLiteral("Archive"));
     QTRY_COMPARE(statusText(), taken);
     rename(QStringLiteral("a/b"));
     QTRY_COMPARE(statusText(), unusable);
     QVERIFY(waitIdle());
-    QCOMPARE(m_session->entryCount(), 2);
+    QCOMPARE(m_session->entryCount(), 3);
     QVERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
 }
 
@@ -2072,10 +2723,9 @@ void TestStudio::purgeEmptiesTheTrash()
     QTRY_VERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Memo")));
 }
 
-// A folder has no trash: Del and the menu offer to delete it for good and
-// ask first. Cancel keeps it; Delete removes it and leaves nothing to
-// restore. Core refuses a folder that holds anything, and the window says
-// so. A document still goes to the trash, restorable, without asking.
+// A folder goes to the trash like a document: Del and the menu ask first,
+// and Cancel keeps it. Move to trash takes the folder and what it holds
+// there, and Restore brings it back. A document goes without asking.
 void TestStudio::deletingAFolderAsksFirst()
 {
     openSpace(QStringLiteral("Inbox"));
@@ -2089,16 +2739,16 @@ void TestStudio::deletingAFolderAsksFirst()
     QVERIFY(waitIdle());
 
     clickItem(waitRow(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
-    QTRY_COMPARE(propertyOf(QStringLiteral("trashButton"), "text").toString(), QStringLiteral("Delete folder"));
-    QCOMPARE(propertyOf(QStringLiteral("trashButton"), "icon").toString(), QStringLiteral("purge"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("trashButton"), "text").toString(), QStringLiteral("Move to trash"));
+    QCOMPARE(propertyOf(QStringLiteral("trashButton"), "icon").toString(), QStringLiteral("trash"));
     key(Qt::Key_Delete);
     QTRY_VERIFY(shown(QStringLiteral("deleteFolderPanel")));
     QTRY_VERIFY(panelOpen());
     QTRY_COMPARE(focusName(), QStringLiteral("sidePanelCancel"));
     QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(),
-             QStringLiteral("Delete folder \u201cDrafts\u201d?"));
+             QStringLiteral("Move folder \u201cDrafts\u201d to the trash?"));
     QCOMPARE(propertyOf(QStringLiteral("confirmDetail"), "text").toString(),
-             QStringLiteral("This cannot be undone."));
+             QStringLiteral("The folder and everything in it go to the trash."));
     // Keys that are not the panel's run no command under it.
     key(Qt::Key_Backspace);
     QCOMPARE(m_session->level(), QStringLiteral("files"));
@@ -2121,23 +2771,28 @@ void TestStudio::deletingAFolderAsksFirst()
     key(Qt::Key_Return);
     QTRY_VERIFY(!rowTitled(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
     QVERIFY(waitIdle());
-    QVERIFY(m_session->lastTrashedId().isEmpty());
-    QVERIFY(!shown(QStringLiteral("restoreButton")));
-    QCOMPARE(m_core.state().value(QStringLiteral("trash")).toArray().size(), 0);
-    QCOMPARE(statusText(), QString());
+    QVERIFY(!m_session->lastTrashedId().isEmpty());
+    QVERIFY(shown(QStringLiteral("restoreButton")));
+    QCOMPARE(m_core.state().value(QStringLiteral("trash")).toArray().size(), 1);
+    QCOMPARE(statusText(), QStringLiteral("Moved to trash. Restore brings it back."));
+    QTest::keyClick(window(), Qt::Key_Z, Qt::ControlModifier);
+    QTRY_VERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
 
+    // With what it holds, Plans goes to the trash too.
     clickItem(waitRow(QStringLiteral("entryRow"), QStringLiteral("Plans")), Qt::RightButton);
     QTRY_VERIFY(menuOpen());
     QCOMPARE(QAccessible::queryAccessibleInterface(waitItem(QStringLiteral("menu_trash")))
                      ->text(QAccessible::Name),
-             QStringLiteral("Delete folder"));
+             QStringLiteral("Move to trash"));
     clickItem(waitItem(QStringLiteral("menu_trash")));
     QTRY_VERIFY(panelOpen());
     clickItem(waitItem(QStringLiteral("sidePanelSave")));
-    QTRY_COMPARE(statusText(), QStringLiteral("Only an empty folder can be deleted."));
+    QTRY_VERIFY(!rowTitled(QStringLiteral("entryRow"), QStringLiteral("Plans")));
     QVERIFY(waitIdle());
-    QVERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Plans")));
-    QVERIFY(!shown(QStringLiteral("restoreButton")));
+    QVERIFY(shown(QStringLiteral("restoreButton")));
+    QCOMPARE(m_core.state().value(QStringLiteral("trash")).toArray().size(), 2);
+    clickItem(waitItem(QStringLiteral("restoreButton")));
+    QTRY_VERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Plans")));
 
     clickItem(waitRow(QStringLiteral("entryRow"), QStringLiteral("Memo")));
     QTRY_COMPARE(propertyOf(QStringLiteral("trashButton"), "text").toString(), QStringLiteral("Move to trash"));
@@ -2372,7 +3027,7 @@ void TestStudio::emptyStateShowsLoadingAndErrors()
     QVERIFY(propertyOf(QStringLiteral("emptyText"), "font").value<QFont>().italic());
 
     addFolder(QStringLiteral("Contracts"));
-    QVERIFY(m_core.failNext(QStringLiteral("GET"), QStringLiteral("/documents$"), 1, FakeCore::FaultMode::Hold));
+    QVERIFY(m_core.failNext(QStringLiteral("GET"), QStringLiteral("/items$"), 1, FakeCore::FaultMode::Hold));
     m_session->openEntry(QStringLiteral("folder"), entryId(QStringLiteral("Contracts")));
     QTRY_COMPARE(m_core.held(), 1);
     QCOMPARE(propertyOf(QStringLiteral("emptyState"), "mode").toString(), QStringLiteral("loading"));
@@ -3039,7 +3694,7 @@ void TestStudio::explorerManagesFolderAccess()
     QTRY_VERIFY(shown(QStringLiteral("accessPage")));
     QVERIFY(!shown(QStringLiteral("entryPane")));
     QVERIFY(!panelOpen());
-    QCOMPARE(m_session->accessGrants()->kind(), QStringLiteral("folder"));
+    QCOMPARE(m_session->accessGrants()->kind(), QStringLiteral("item"));
     QCOMPARE(m_session->accessGrants()->targetId(), folder);
     QCOMPARE(propertyOf(QStringLiteral("placeTitle"), "text").toString(), QStringLiteral("Plans"));
     QTRY_VERIFY(waitItem(QStringLiteral("placeBackButton"))->hasActiveFocus());
@@ -3100,7 +3755,7 @@ void TestStudio::explorerManagesFolderAccess()
     QVERIFY(grants->holders().isEmpty());
     QCOMPARE(grants->inherited().size(), 2);
     const QString fromSpace = QStringLiteral("accessHolder_inherited:space:%1_%2").arg(spaceId, principal);
-    const QString fromFolder = QStringLiteral("accessHolder_inherited:folder:%1_%2").arg(folder, principal);
+    const QString fromFolder = QStringLiteral("accessHolder_inherited:item:%1_%2").arg(folder, principal);
     QTRY_VERIFY(shown(fromSpace));
     QVERIFY(shown(fromFolder));
     QCOMPARE(cell(fromSpace, 1), QStringLiteral("Content reader"));
@@ -3245,7 +3900,7 @@ void TestStudio::memberPageListsAccessGroupsAndRoles()
     QTRY_VERIFY(!grants->busy());
     grants->setRoles(QStringLiteral("user:") + bo, {QStringLiteral("role-content_reader")});
     QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
-    grants->open(QStringLiteral("folder"), spaceId, folder, QStringLiteral("Plans"));
+    grants->open(QStringLiteral("item"), spaceId, folder, QStringLiteral("Plans"));
     QTRY_VERIFY(!grants->busy());
     grants->setRoles(QStringLiteral("group:") + legal, {QStringLiteral("role-content_contributor")});
     QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
@@ -4138,7 +4793,7 @@ void TestStudio::refusalsLeadToTheFix()
     QTRY_VERIFY(propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
     QVERIFY(!shown(QStringLiteral("manageFixButton")));
     clickItem(waitItem(QStringLiteral("manage-documentButton")));
-    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("document")).toObject().value(QStringLiteral("controlled_docs_enabled")).toBool());
     QTRY_COMPARE(propertyOf(QStringLiteral("manage-documentButton"), "reason").toString(), QStringLiteral("It is managed with reviews already."));
     QVERIFY(!propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
     QTRY_VERIFY(propertyOf(QStringLiteral("unmanage-documentButton"), "usable").toBool());
@@ -4331,7 +4986,7 @@ void TestStudio::spacePageRequiresReviews()
     clickItem(waitItem(QStringLiteral("manage-documentButton")));
     QTRY_VERIFY2(m_session->controlledDocs()->notice() == QLatin1String("control_enabled"),
                  qPrintable(m_session->controlledDocs()->errorCode()));
-    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("document")).toObject().value(QStringLiteral("controlled_docs_enabled")).toBool());
     m_session->documentView()->close();
     QTRY_VERIFY(!m_session->documentView()->active());
     clickItem(waitItem(QStringLiteral("accountButton")));

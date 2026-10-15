@@ -9,11 +9,13 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonObject>
+#include <QPair>
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QSet>
 #include <QTimer>
 #include <QUrl>
+#include <QUrlQuery>
 
 #include <algorithm>
 
@@ -57,21 +59,40 @@ QString linkText(const QString &title)
     return text.remove(QLatin1Char('[')).remove(QLatin1Char(']'));
 }
 
-// `![alt](matome:asset/<document>?version=<version>)`; the alt text is free.
+// The items of `kind` in the space, as Core's collection path narrowed by `filter`.
+QString itemsIn(const QString &orgId, const QString &spaceId, const QString &kind, QList<QPair<QString, QString>> filter)
+{
+    filter.prepend({QStringLiteral("kind"), kind});
+    filter.prepend({QStringLiteral("space_id"), spaceId});
+    QUrlQuery query;
+    query.setQueryItems(filter);
+    return itemsPath(orgId) + QLatin1Char('?') + query.toString(QUrl::FullyEncoded);
+}
+
+// A Core id: a UUID in either letter case.
+const QString &uuidPattern()
+{
+    static const QString pattern = QStringLiteral("[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}");
+    return pattern;
+}
+
+// An image link to a file of the space: `matome:asset/<item>?version=<version>`.
 const QRegularExpression &assetLink()
 {
-    static const QRegularExpression link(QStringLiteral(R"(\]\(matome:asset/(\d+)\?version=([0-9A-Fa-f-]{36})\))"));
+    static const QRegularExpression link(QStringLiteral(R"(^matome:asset/(%1)\?version=(%2)$)")
+                                                 .arg(uuidPattern(), uuidPattern()));
     return link;
 }
 
-// Any file a document links: `](matome:asset/<document>?version=<version>)`,
-// `](matome:doc/<document>)` with the version optional, or `](/<path>)` from
+// Any file a document links: `](matome:asset/<item>?version=<version>)`,
+// `](matome:doc/<item>)` with the version optional, or `](/<path>)` from
 // the space root with an optional title. `//host` is another site; a path
 // may hold balanced parentheses, as CommonMark allows.
 const QRegularExpression &fileLink()
 {
     static const QRegularExpression link(QStringLiteral(
-            R"(\]\((?:matome:(asset|doc)/(\d+)(?:\?version=([0-9A-Fa-f-]{36}))?|(/(?:[^/\s()]|\([^\s()]*\))(?:[^\s()]|\([^\s()]*\))*)(?:\s+"[^"]*")?)\))"));
+            R"(\]\((?:matome:(asset|doc)/(%1)(?:\?version=(%2))?|(/(?:[^/\s()]|\([^\s()]*\))(?:[^\s()]|\([^\s()]*\))*)(?:\s+"[^"]*")?)\))")
+                                                 .arg(uuidPattern(), uuidPattern()));
     return link;
 }
 
@@ -96,8 +117,8 @@ struct Link {
     qsizetype length = 0;
 };
 
-// The references `markdown` declares, in order and once each: a document and
-// the version it pins, or a path compared like Core's name keys.
+// The references `markdown` declares, in order and once each: an item and
+// the version it pins, or a path compared exactly, as Core names are.
 QList<Link> fileLinks(const QString &markdown, bool paths)
 {
     QList<Link> links;
@@ -111,12 +132,13 @@ QList<Link> fileLinks(const QString &markdown, bool paths)
             if (path.isEmpty())
                 continue;
             reference.insert(QStringLiteral("path"), path);
-            key = QStringLiteral("path:") + path.normalized(QString::NormalizationForm_C).toCaseFolded();
+            key = QStringLiteral("path:") + path;
         } else {
-            reference.insert(QStringLiteral("document_id"), match.captured(2).toLongLong());
-            if (!match.captured(3).isEmpty())
-                reference.insert(QStringLiteral("version_id"), match.captured(3));
-            key = match.captured(2) + QLatin1Char('@') + match.captured(3);
+            const QString item = match.captured(2).toLower(), version = match.captured(3).toLower();
+            reference.insert(QStringLiteral("item_id"), item);
+            if (!version.isEmpty())
+                reference.insert(QStringLiteral("version_id"), version);
+            key = item + QLatin1Char('@') + version;
         }
         if (seen.contains(key))
             continue;
@@ -125,15 +147,6 @@ QList<Link> fileLinks(const QString &markdown, bool paths)
     }
     return links;
 }
-
-// An image linked from anywhere else: `![alt](http…)`.
-const QRegularExpression &externalImage()
-{
-    static const QRegularExpression image(QStringLiteral(R"(!\[([^\]]*)\]\(((?:https?:)?//[^)\s]+)[^)]*\))"),
-                                          QRegularExpression::CaseInsensitiveOption);
-    return image;
-}
-
 
 } // namespace
 
@@ -162,15 +175,16 @@ QString Assets::pathLink(const QString &title, const QString &path)
     return QStringLiteral("[%1](/%2)").arg(linkText(title), segments.join(QLatin1Char('/')));
 }
 
-QString Assets::render(const QString &markdown, const QString &orgId, const QString &spaceId,
-                       const QString &viaVersionId, int width, bool external) const
+QString Assets::imageSource(const QString &link, const QString &orgId, const QString &spaceId,
+                            const QString &viaVersionId, int width, bool external)
 {
-    QString shown = markdown;
-    shown.replace(assetLink(), QStringLiteral("](%1)").arg(source(orgId, spaceId, viaVersionId,
-                                                                  QStringLiteral("\\1"), QStringLiteral("\\2"), width)));
-    if (!external)
-        shown.replace(externalImage(), QStringLiteral("*\\1* ") + tr("(external image not loaded: %1)").arg(QStringLiteral("\\2")));
-    return shown;
+    static const QRegularExpression web(QStringLiteral("^(?:https?:)?//"), QRegularExpression::CaseInsensitiveOption);
+    const auto asset = assetLink().match(link);
+    if (asset.hasMatch())
+        return source(orgId, spaceId, viaVersionId, asset.captured(1), asset.captured(2), width);
+    if (external && web.match(link).hasMatch())
+        return link.startsWith(QLatin1String("//")) ? QStringLiteral("https:") + link : link;
+    return {};
 }
 
 QString Assets::source(const QString &orgId, const QString &spaceId, const QString &viaVersionId,
@@ -187,11 +201,6 @@ QVariantMap Assets::referenceAt(const QString &markdown, int index, bool paths) 
     if (index < 0 || index >= links.size())
         return {};
     return {{QStringLiteral("start"), links.at(index).start}, {QStringLiteral("length"), links.at(index).length}};
-}
-
-bool Assets::linksExternal(const QString &markdown) const
-{
-    return externalImage().match(markdown).hasMatch();
 }
 
 bool isRasterImage(const QByteArray &bytes)
@@ -252,28 +261,29 @@ void Assets::search(const QString &text, const QString &folderId, const QString 
     const int generation = m_generation;
     const int search = ++m_searches;
     const QString orgId = m_session.currentOrgId(), spaceId = m_session.currentSpaceId();
-    const QString path = contentPath(orgId, spaceId, QStringLiteral("documents?limit=25&q="))
-            + QString::fromLatin1(QUrl::toPercentEncoding(text.trimmed()));
+    const QString path = itemsIn(orgId, spaceId, QStringLiteral("document"),
+                                 {{QStringLiteral("limit"), QStringLiteral("25")}, {QStringLiteral("q"), text.trimmed()}});
     m_backend.request("GET", path, {}, {}, [this, generation, search, text, folderId, excludeId, spaceId](const Client::Reply &reply) {
         // Only the latest search answers: typing on overtakes the rest.
         if (!live(generation) || search != m_searches) return;
         const auto *folders = m_session.folders();
         const QString space = m_session.spaces()->nameOf(spaceId);
         QList<QVariantMap> files;
-        for (const auto &row : reply.json.value(QStringLiteral("documents")).toArray()) {
-            const auto document = row.toObject();
-            const QString id = jsonId(document.value(QStringLiteral("id")));
+        for (const auto &row : reply.json.value(QStringLiteral("items")).toArray()) {
+            const auto item = row.toObject();
+            const QString id = jsonId(item.value(QStringLiteral("id")));
             if (id.isEmpty() || id == excludeId) continue;
-            const auto version = document.value(QStringLiteral("current_version")).toObject();
-            const QString folder = jsonId(document.value(QStringLiteral("folder_id")));
-            const QString title = document.value(QStringLiteral("title")).toString();
+            const auto facet = item.value(QStringLiteral("document")).toObject();
+            const auto version = facet.value(QStringLiteral("current_version")).toObject();
+            const QString folder = jsonId(item.value(QStringLiteral("parent_id")));
+            const QString name = item.value(QStringLiteral("name")).toString();
             const QStringList names = folders->namesTo(folder);
             files.append({{QStringLiteral("documentId"), id},
-                          {QStringLiteral("versionId"), jsonId(version.value(QStringLiteral("id")))},
-                          {QStringLiteral("title"), title},
+                          {QStringLiteral("versionId"), jsonId(facet.value(QStringLiteral("current_version_id")))},
+                          {QStringLiteral("name"), name},
                           {QStringLiteral("folderId"), folder},
                           {QStringLiteral("place"), (QStringList{space} + names).join(QStringLiteral(" › "))},
-                          {QStringLiteral("path"), QLatin1Char('/') + (names + QStringList{title}).join(QLatin1Char('/'))},
+                          {QStringLiteral("path"), QLatin1Char('/') + (names + QStringList{name}).join(QLatin1Char('/'))},
                           {QStringLiteral("image"), version.value(QStringLiteral("detected_content_type")).toString()
                                                             .startsWith(QLatin1String("image/"))}});
         }
@@ -281,11 +291,11 @@ void Assets::search(const QString &text, const QString &folderId, const QString 
         std::stable_sort(files.begin(), files.end(), [&](const QVariantMap &a, const QVariantMap &b) {
             const auto rank = [&](const QVariantMap &file) {
                 return (file.value(QStringLiteral("folderId")).toString() == folderId ? 0 : 2)
-                        + (file.value(QStringLiteral("title")).toString().startsWith(needle, Qt::CaseInsensitive) ? 0 : 1);
+                        + (file.value(QStringLiteral("name")).toString().startsWith(needle, Qt::CaseInsensitive) ? 0 : 1);
             };
             if (rank(a) != rank(b)) return rank(a) < rank(b);
-            return a.value(QStringLiteral("title")).toString().compare(b.value(QStringLiteral("title")).toString(),
-                                                                       Qt::CaseInsensitive) < 0;
+            return a.value(QStringLiteral("name")).toString().compare(b.value(QStringLiteral("name")).toString(),
+                                                                      Qt::CaseInsensitive) < 0;
         });
         QVariantList list;
         for (const QVariantMap &file : std::as_const(files)) list.append(file);
@@ -294,7 +304,7 @@ void Assets::search(const QString &text, const QString &folderId, const QString 
 }
 
 // Walks the folders the space lists down to the link's last folder, then
-// asks for the documents there titled like its last segment.
+// asks for the documents there named like its last segment.
 void Assets::resolve(const QString &link)
 {
     QStringList names;
@@ -318,17 +328,16 @@ void Assets::resolve(const QString &link)
         folderId = row->id;
     }
     const int generation = m_generation;
-    const QString path = contentPath(m_session.currentOrgId(), m_session.currentSpaceId(),
-                                     QStringLiteral("documents?limit=100&folder_id=%1&q=")
-                                             .arg(folderId.isEmpty() ? QStringLiteral("root") : folderId))
-            + QString::fromLatin1(QUrl::toPercentEncoding(title));
+    const QString path = itemsIn(m_session.currentOrgId(), m_session.currentSpaceId(), QStringLiteral("document"),
+                                 {{QStringLiteral("parent_id"), folderId.isEmpty() ? QStringLiteral("null") : folderId},
+                                  {QStringLiteral("limit"), QStringLiteral("100")}, {QStringLiteral("q"), title}});
     m_backend.request("GET", path, {}, {}, [this, generation, link, title](const Client::Reply &reply) {
         if (!live(generation)) return;
         QString documentId;
-        for (const auto &row : reply.json.value(QStringLiteral("documents")).toArray()) {
-            const auto document = row.toObject();
-            if (document.value(QStringLiteral("title")).toString() == title) {
-                documentId = jsonId(document.value(QStringLiteral("id")));
+        for (const auto &row : reply.json.value(QStringLiteral("items")).toArray()) {
+            const auto item = row.toObject();
+            if (item.value(QStringLiteral("name")).toString() == title) {
+                documentId = jsonId(item.value(QStringLiteral("id")));
                 break;
             }
         }
@@ -359,14 +368,16 @@ void Assets::next()
     const Upload upload = m_uploads.head();
     const int generation = m_generation;
     const QString checksum = QString::fromLatin1(QCryptographicHash::hash(upload.bytes, QCryptographicHash::Sha256).toHex());
-    m_backend.request("GET", contentPath(upload.orgId, upload.spaceId, QStringLiteral("documents?checksum_sha256=") + checksum),
+    m_backend.request("GET", itemsIn(upload.orgId, upload.spaceId, QStringLiteral("document"),
+                                     {{QStringLiteral("checksum_sha256"), checksum}}),
                       {}, {}, [this, generation, upload](const Client::Reply &reply) {
         if (!live(generation)) return;
-        for (const auto &row : reply.json.value(QStringLiteral("documents")).toArray()) {
-            const auto document = row.toObject();
-            const QString version = jsonId(document.value(QStringLiteral("current_version")).toObject().value(QStringLiteral("id")));
+        for (const auto &row : reply.json.value(QStringLiteral("items")).toArray()) {
+            const auto item = row.toObject();
+            const QString version = jsonId(item.value(QStringLiteral("document")).toObject()
+                                               .value(QStringLiteral("current_version_id")));
             if (!version.isEmpty()) {
-                finish(markdownLink(upload.name, jsonId(document.value(QStringLiteral("id"))), version, true), {});
+                finish(markdownLink(upload.name, jsonId(item.value(QStringLiteral("id"))), version, true), {});
                 return;
             }
         }
@@ -388,14 +399,15 @@ void Assets::withFolder(const Upload &upload, std::function<void(const QString &
 void Assets::findFolder(const Upload &upload, bool created, std::function<void(const QString &)> done)
 {
     const int generation = m_generation;
-    m_backend.list(contentPath(upload.orgId, upload.spaceId, QStringLiteral("folders")), QStringLiteral("folders"),
+    m_backend.list(itemsIn(upload.orgId, upload.spaceId, QStringLiteral("folder"),
+                           {{QStringLiteral("parent_id"), QStringLiteral("null")}}),
+                   QStringLiteral("items"),
                    [this, generation] { return live(generation); },
                    [this, generation, upload, created, done](const Client::Reply &reply, const QJsonArray &rows) {
         if (!reply.ok) { finish({}, failCode(reply)); return; }
         for (const auto &row : rows) {
             const auto folder = row.toObject();
-            if (jsonId(folder.value(QStringLiteral("parent_id"))).isEmpty()
-                    && folder.value(QStringLiteral("name")).toString().compare(folderName(), Qt::CaseInsensitive) == 0) {
+            if (folder.value(QStringLiteral("name")).toString() == folderName()) {
                 const QString id = jsonId(folder.value(QStringLiteral("id")));
                 m_folders.insert(upload.orgId + QLatin1Char('/') + upload.spaceId, id);
                 done(id);
@@ -403,12 +415,13 @@ void Assets::findFolder(const Upload &upload, bool created, std::function<void(c
             }
         }
         if (created) { finish({}, QStringLiteral("assets_unavailable")); return; }
-        m_backend.request("POST", contentPath(upload.orgId, upload.spaceId, QStringLiteral("folders")),
-                          {{QStringLiteral("name"), folderName()}}, idempotencyHeader(),
-                          [this, generation, upload, done](const Client::Reply &made) {
+        m_backend.request("POST", itemsPath(upload.orgId),
+                          {{QStringLiteral("kind"), QStringLiteral("folder")}, {QStringLiteral("space_id"), upload.spaceId},
+                           {QStringLiteral("name"), folderName()}},
+                          idempotencyHeader(), [this, generation, upload, done](const Client::Reply &made) {
             if (!live(generation)) return;
             if (made.ok) {
-                const QString id = jsonId(made.json.value(QStringLiteral("folder")).toObject().value(QStringLiteral("id")));
+                const QString id = jsonId(made.json.value(QStringLiteral("item")).toObject().value(QStringLiteral("id")));
                 m_folders.insert(upload.orgId + QLatin1Char('/') + upload.spaceId, id);
                 done(id);
             } else if (made.code == QLatin1String("name_conflict")) {
@@ -425,8 +438,10 @@ void Assets::findFolder(const Upload &upload, bool created, std::function<void(c
 void Assets::store(const Upload &upload, const QString &folderId, const QString &title, bool retried)
 {
     const int generation = m_generation;
-    m_backend.request("POST", contentPath(upload.orgId, upload.spaceId, QStringLiteral("documents")),
-                      {{QStringLiteral("title"), title}, {QStringLiteral("folder_id"), folderId}}, idempotencyHeader(),
+    m_backend.request("POST", itemsPath(upload.orgId),
+                      {{QStringLiteral("kind"), QStringLiteral("document")}, {QStringLiteral("space_id"), upload.spaceId},
+                       {QStringLiteral("parent_id"), folderId}, {QStringLiteral("name"), title}},
+                      idempotencyHeader(),
                       [this, generation, upload, folderId, title, retried](const Client::Reply &made) {
         if (!live(generation)) return;
         if (!made.ok && made.code == QLatin1String("name_conflict") && !retried) {
@@ -436,10 +451,10 @@ void Assets::store(const Upload &upload, const QString &folderId, const QString 
                           .arg(name.suffix()), true);
             return;
         }
-        const QString documentId = jsonId(made.json.value(QStringLiteral("document")).toObject().value(QStringLiteral("id")));
+        const QString documentId = jsonId(made.json.value(QStringLiteral("item")).toObject().value(QStringLiteral("id")));
         if (!made.ok || documentId.isEmpty()) { finish({}, made.ok ? QStringLiteral("invalid_request") : failCode(made)); return; }
         m_backend.upload(upload.orgId,
-                         {{QStringLiteral("space_id"), upload.spaceId}, {QStringLiteral("document_id"), documentId},
+                         {{QStringLiteral("space_id"), upload.spaceId}, {QStringLiteral("item_id"), documentId},
                           {QStringLiteral("filename"), title}, {QStringLiteral("content_type"), rasterType(upload.bytes)}},
                          upload.bytes, [this, generation] { return live(generation); },
                          [this, documentId, title](const Client::Reply &reply) {
@@ -495,13 +510,13 @@ void Assets::sign(const QList<Pending> &batch)
     const Target &first = batch.constFirst().target;
     QJsonArray items;
     for (const Pending &pending : batch)
-        items.append(QJsonObject{{QStringLiteral("document_id"), pending.target.documentId.toLongLong()},
+        items.append(QJsonObject{{QStringLiteral("item_id"), pending.target.documentId},
                                  {QStringLiteral("version_id"), pending.target.versionId}});
-    QJsonObject body{{QStringLiteral("items"), items}};
+    QJsonObject body{{QStringLiteral("space_id"), first.spaceId}, {QStringLiteral("items"), items}};
     if (!first.viaVersionId.isEmpty())
         body.insert(QStringLiteral("via_version_id"), first.viaVersionId);
     const int generation = m_generation;
-    m_backend.request("POST", contentPath(first.orgId, first.spaceId, QStringLiteral("documents/download-urls")), body, {},
+    m_backend.request("POST", itemsPath(first.orgId) + QStringLiteral("/download-urls"), body, {},
                       [this, generation, batch](const Client::Reply &reply) {
         if (!live(generation)) return;
         const QJsonArray data = reply.json.value(QStringLiteral("data")).toArray();

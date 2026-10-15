@@ -137,8 +137,7 @@ QString AccessGrants::path(const QString &leaf) const
 
 void AccessGrants::open(const QString &kind, const QString &spaceId, const QString &targetId, const QString &name)
 {
-    static const QStringList kinds{QStringLiteral("space"), QStringLiteral("folder"), QStringLiteral("document"),
-                                   QStringLiteral("tag")};
+    static const QStringList kinds{QStringLiteral("space"), QStringLiteral("item"), QStringLiteral("tag")};
     if (!kinds.contains(kind) || targetId.isEmpty() || m_session.currentOrgId().isEmpty()
         || (kind != QLatin1String("tag") && spaceId.isEmpty()))
         return;
@@ -166,11 +165,12 @@ void AccessGrants::close()
     m_errorCode.clear(); m_notice.clear();
     m_grants = m_inherited = {};
     m_summary = {};
+    m_revision = 0;
     emit changed();
 }
 
-// A tag lists its grants; a space, folder, or document lists its effective
-// access, its own grants marked not inherited.
+// A tag lists its grants; a space or item lists its effective access, its
+// own grants marked not inherited.
 void AccessGrants::refresh()
 {
     if (!active())
@@ -182,7 +182,7 @@ void AccessGrants::refresh()
     m_tagGrants.clear();
     m_errorCode.clear();
     emit changed();
-    if (m_kind == QLatin1String("document")) readTags(generation);
+    if (m_kind == QLatin1String("item")) readItem(generation);
     const bool tag = m_kind == QLatin1String("tag");
     const QString key = tag ? QStringLiteral("grants") : QStringLiteral("access");
     m_backend.list(path(key), key, [this, generation] { return live(generation); },
@@ -209,14 +209,17 @@ void AccessGrants::refresh()
     });
 }
 
-// The tags on the open document, each with its grants: a restricted one
-// hides the document from whoever none of them reaches.
-void AccessGrants::readTags(int generation)
+// The open item's revision, which its inheritance change sends back, and the
+// tags on it (a document's), each with its grants: a restricted one hides
+// the item from whoever none of them reaches.
+void AccessGrants::readItem(int generation)
 {
     ++m_pending;
-    m_backend.request("GET", contentPath(m_orgId, m_spaceId, QStringLiteral("documents/") + m_targetId), {}, {}, [this, generation](const Client::Reply &reply) {
+    m_backend.request("GET", itemPath(m_orgId, m_targetId), {}, {}, [this, generation](const Client::Reply &reply) {
         if (!live(generation)) return;
-        for (const auto &value : reply.json.value(QStringLiteral("document")).toObject().value(QStringLiteral("tag_assignments")).toArray()) {
+        const auto item = reply.json.value(QStringLiteral("item")).toObject();
+        m_revision = item.value(QStringLiteral("revision")).toInt();
+        for (const auto &value : item.value(QStringLiteral("document")).toObject().value(QStringLiteral("tag_assignments")).toArray()) {
             const QString tag = jsonId(value.toObject().value(QStringLiteral("tag_id")));
             if (tag.isEmpty() || m_tagGrants.contains(tag)) continue;
             m_tagGrants.insert(tag, {});
@@ -324,8 +327,7 @@ void AccessGrants::add(const QStringList &principals, const QStringList &roleIds
 void AccessGrants::setInheritance(const QString &inheritance)
 {
     static const QStringList values{QStringLiteral("inherit"), QStringLiteral("restricted"), QStringLiteral("open")};
-    if (!active() || busy() || !values.contains(inheritance)
-        || (m_kind != QLatin1String("folder") && m_kind != QLatin1String("document")))
+    if (!active() || busy() || !values.contains(inheritance) || m_kind != QLatin1String("item"))
         return;
     const int generation = m_generation;
     // Stopped already, it switches between restricted and open.
@@ -334,11 +336,13 @@ void AccessGrants::setInheritance(const QString &inheritance)
     m_errorCode.clear();
     m_notice.clear();
     emit changed();
-    m_backend.request("PUT", path(QStringLiteral("access")), {{QStringLiteral("inheritance"), inheritance}},
-                      idempotencyHeader(), [this, generation, inheritance, stopped](const Client::Reply &reply) {
+    m_backend.request("PATCH", itemPath(m_orgId, m_targetId), {{QStringLiteral("inheritance"), inheritance}},
+                      idempotentMatchHeader(m_revision), [this, generation, inheritance, stopped](const Client::Reply &reply) {
         if (!live(generation)) return;
         --m_pending;
         if (!reply.ok) {
+            // A stale revision reads the item again, which shows what changed.
+            if (reply.status == 409) refresh();
             m_errorCode = failCode(reply);
             emit changed();
             return;

@@ -84,28 +84,28 @@
     </message>
 </context>
 <context>
-    <name>DiffView</name>
+    <name>ChangesTab</name>
     <message numerus="yes">
-        <location filename="../qml/documents/DiffView.qml" line="+38"/>
-        <source>⋯ %n unchanged line(s)</source>
+        <location filename="../qml/documents/ChangesTab.qml" line="+100"/>
+        <source>+%1 −%2 · %n section(s)</source>
         <translation>
-            <numerusform>⋯ %n unchanged line</numerusform>
-            <numerusform>⋯ %n unchanged lines</numerusform>
+            <numerusform>+%1 −%2 · %n section</numerusform>
+            <numerusform>+%1 −%2 · %n sections</numerusform>
         </translation>
     </message>
 </context>
 <context>
     <name>DocumentScreen</name>
     <message numerus="yes">
-        <location filename="../qml/documents/DocumentScreen.qml" line="+335"/>
-        <source>Managed · %n open review(s)</source>
+        <location filename="../qml/documents/DocumentScreen.qml" line="+329"/>
+        <source>%n review(s) open · %1/%2 approvals</source>
         <translation>
-            <numerusform>Managed · %n open review</numerusform>
-            <numerusform>Managed · %n open reviews</numerusform>
+            <numerusform>Review open · %1/%2 approvals</numerusform>
+            <numerusform>%n reviews open · %1/%2 approvals</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+261"/>
+        <location line="+216"/>
         <source>%n more document(s) you cannot open link this one.</source>
         <translation>
             <numerusform>%n more document you cannot open links this one.</numerusform>
@@ -147,6 +147,17 @@
     </message>
 </context>
 <context>
+    <name>MarkdownView</name>
+    <message numerus="yes">
+        <location filename="../qml/documents/MarkdownView.qml" line="+746"/>
+        <source>⋯ %n unchanged block(s)</source>
+        <translation>
+            <numerusform>⋯ %n unchanged block</numerusform>
+            <numerusform>⋯ %n unchanged blocks</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>Messages</name>
     <message numerus="yes">
         <location filename="../qml/chrome/Messages.js" line="+38"/>
@@ -173,7 +184,7 @@
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+124"/>
+        <location line="+123"/>
         <source>%n permission(s)</source>
         <translation>
             <numerusform>%n permission</numerusform>
@@ -225,17 +236,6 @@
     </message>
 </context>
 <context>
-    <name>ReviewPage</name>
-    <message numerus="yes">
-        <location filename="../qml/controlled_docs/ReviewPage.qml" line="+87"/>
-        <source>You approved this proposal. It is published once %n more reviewer(s) approve it.</source>
-        <translation>
-            <numerusform>You approved this proposal. It is published once %n more reviewer approves it.</numerusform>
-            <numerusform>You approved this proposal. It is published once %n more reviewers approve it.</numerusform>
-        </translation>
-    </message>
-</context>
-<context>
     <name>RolePage</name>
     <message numerus="yes">
         <location filename="../qml/screens/RolePage.qml" line="+87"/>
@@ -243,6 +243,17 @@
         <translation>
             <numerusform>%n permission</numerusform>
             <numerusform>%n permissions</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>SourceDiff</name>
+    <message numerus="yes">
+        <location filename="../qml/documents/SourceDiff.qml" line="+88"/>
+        <source>⋯ %n unchanged line(s)</source>
+        <translation>
+            <numerusform>⋯ %n unchanged line</numerusform>
+            <numerusform>⋯ %n unchanged lines</numerusform>
         </translation>
     </message>
 </context>

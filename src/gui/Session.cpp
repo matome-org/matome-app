@@ -128,6 +128,10 @@ Session::Session(QObject *parent, AddOnBackend *backend)
         m_lastTrashed = {QStringLiteral("document"), id, revision};
         notify();
     });
+    connect(&m_folders, &FolderModel::trashed, this, [this](const QString &id, int revision) {
+        m_lastTrashed = {QStringLiteral("folder"), id, revision};
+        notify();
+    });
     QCoreApplication::instance()->installEventFilter(this);
 }
 
@@ -197,9 +201,15 @@ bool Session::inSpace() const
     return m_signedIn && !currentOrgId().isEmpty() && !currentSpaceId().isEmpty();
 }
 
-QString Session::spacePath(const QString &leaf) const
+QString Session::spaceItemsPath(const QString &filter) const
 {
-    return contentPath(currentOrgId(), currentSpaceId(), leaf);
+    return itemsPath(currentOrgId()) + QStringLiteral("?space_id=") + currentSpaceId() + QLatin1Char('&') + filter;
+}
+
+QJsonObject Session::moveDestination(const QString &parentId) const
+{
+    return {{QStringLiteral("space_id"), currentSpaceId()},
+            {QStringLiteral("parent_id"), parentId.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(parentId)}};
 }
 
 Session::Level Session::where() const

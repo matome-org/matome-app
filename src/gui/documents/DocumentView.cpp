@@ -55,7 +55,7 @@ DocumentView::DocumentView(Session &session, AddOnBackend &backend)
 
 QString DocumentView::title() const
 {
-    return m_document.value(QStringLiteral("title")).toString();
+    return m_document.value(QStringLiteral("name")).toString();
 }
 
 QStringList DocumentView::place() const
@@ -63,7 +63,7 @@ QStringList DocumentView::place() const
     if (!m_active)
         return {};
     return QStringList{m_session.spaces()->nameOf(m_spaceId)}
-            + m_session.folders()->namesTo(jsonId(m_document.value(QStringLiteral("folder_id"))));
+            + m_session.folders()->namesTo(jsonId(m_document.value(QStringLiteral("parent_id"))));
 }
 
 QString DocumentView::versionId() const
@@ -109,6 +109,14 @@ void DocumentView::setTab(const QString &tab)
         loadRelated();
 }
 
+void DocumentView::stopEditing()
+{
+    if (!m_editing)
+        return;
+    m_editing = false;
+    emit changed();
+}
+
 void DocumentView::setExtraTab(const QString &tab, bool shown)
 {
     if (shown == m_extraTabs.contains(tab))
@@ -122,9 +130,9 @@ void DocumentView::setExtraTab(const QString &tab, bool shown)
     emit changed();
 }
 
-QString DocumentView::documentPath(const QString &suffix) const
+QString DocumentView::documentPath(const QString &leaf) const
 {
-    return contentPath(m_orgId, m_spaceId, QStringLiteral("documents/%1%2").arg(m_documentId, suffix));
+    return itemPath(m_orgId, m_documentId, leaf);
 }
 
 void DocumentView::open(const QString &documentId)
@@ -146,12 +154,13 @@ void DocumentView::close()
     if (!m_active)
         return;
     ++m_generation;
-    m_active = m_textLoaded = false;
-    m_pending = 0;
+    m_active = m_textLoaded = m_editing = false;
+    m_pending = m_comparePending = 0;
     m_errorIndex = -1;
     m_orgId.clear(); m_spaceId.clear(); m_documentId.clear(); m_tab.clear();
     m_text.clear(); m_errorCode.clear(); m_notice.clear();
-    m_document = m_version = {};
+    m_document = m_version = m_compareFrom = m_compareTo = {};
+    m_compareBefore = m_compareAfter = QString();
     m_versions = {};
     clearRelated();
     m_extraTabs.clear();
@@ -166,12 +175,13 @@ void DocumentView::refresh()
         load();
 }
 
-// The document and its published versions; the version shown stays selected
-// when it is still there, else the current one is.
+// The document and its published versions; an earlier version shown stays
+// selected when it is still there, else the current one is, the one just
+// published included.
 void DocumentView::load()
 {
     const int generation = ++m_generation;
-    const QString shown = versionId();
+    const QString shown = latest() ? QString() : versionId();
     m_pending = 2;
     m_errorCode.clear();
     clearRelated();
@@ -196,11 +206,11 @@ void DocumentView::load()
     };
     m_backend.request("GET", documentPath(), {}, {}, [this, generation, settle](const Client::Reply &reply) {
         if (!live(generation)) return;
-        m_document = reply.json.value(QStringLiteral("document")).toObject();
+        m_document = reply.json.value(QStringLiteral("item")).toObject();
         if (!reply.ok) m_errorCode = failCode(reply);
         settle();
     });
-    m_backend.list(documentPath(QStringLiteral("/versions")), QStringLiteral("data"),
+    m_backend.list(documentPath(QStringLiteral("versions")), QStringLiteral("data"),
                    [this, generation] { return live(generation); },
                    [this, settle](const Client::Reply &reply, const QJsonArray &rows) {
         QList<QJsonObject> published;
@@ -226,7 +236,6 @@ void DocumentView::selectVersion(const QString &versionId)
     for (const auto &value : std::as_const(m_versions)) {
         if (jsonId(value.toObject().value(QStringLiteral("id"))) == versionId) {
             m_version = value.toObject();
-            if (!latest() && m_tab == QLatin1String("edit")) m_tab = QStringLiteral("view");
             loadText();
             return;
         }
@@ -247,27 +256,95 @@ void DocumentView::loadText()
     const int generation = m_generation;
     ++m_pending;
     emit changed();
-    m_backend.request("GET", documentPath(QStringLiteral("/download?version_id=") + versionId()), {}, {},
-                      [this, generation](const Client::Reply &reply) {
-        if (!live(generation)) return;
-        const QUrl url(reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("url")).toString());
-        if (!reply.ok || url.isEmpty()) {
-            --m_pending;
-            fail(reply.ok ? QStringLiteral("not_found") : failCode(reply));
+    readVersion(versionId(), [this, generation] { return live(generation); }, [this](const QString &text, const QString &code) {
+        --m_pending;
+        if (!code.isEmpty()) {
+            fail(code);
             return;
         }
-        m_backend.getFile(url, [this, generation](const Client::Reply &file) {
-            if (!live(generation)) return;
-            --m_pending;
+        m_text = text;
+        m_textLoaded = true;
+        emit textChanged();
+        emit changed();
+    });
+}
+
+void DocumentView::readVersion(const QString &versionId, const AddOnBackend::Live &live, const TextReady &done)
+{
+    m_backend.request("GET", documentPath(QStringLiteral("download?version_id=") + versionId), {}, {},
+                      [this, live, done](const Client::Reply &reply) {
+        if (!live()) return;
+        const QUrl url(reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("url")).toString());
+        if (!reply.ok || url.isEmpty()) {
+            done({}, reply.ok ? QStringLiteral("not_found") : failCode(reply));
+            return;
+        }
+        m_backend.getFile(url, [live, done](const Client::Reply &file) {
+            if (!live()) return;
             QString text;
-            if (!file.ok) { fail(failCode(file)); return; }
-            if (!decode(file.bytes, text)) { fail(QStringLiteral("invalid_encoding")); return; }
-            m_text = text;
-            m_textLoaded = true;
-            emit textChanged();
-            emit changed();
+            if (!file.ok) done({}, failCode(file));
+            else if (!decode(file.bytes, text)) done({}, QStringLiteral("invalid_encoding"));
+            else done(text, {});
         });
     });
+}
+
+QVariantMap DocumentView::comparison() const
+{
+    if (m_compareFrom.isEmpty())
+        return {};
+    return {{QStringLiteral("from"), m_compareFrom.toVariantMap()}, {QStringLiteral("to"), m_compareTo.toVariantMap()},
+            {QStringLiteral("before"), m_compareBefore}, {QStringLiteral("after"), m_compareAfter},
+            {QStringLiteral("loaded"), !m_compareBefore.isNull() && !m_compareAfter.isNull()}};
+}
+
+void DocumentView::compare(const QString &fromId, const QString &toId)
+{
+    if (!m_active || m_editing)
+        return;
+    QJsonObject from, to;
+    for (const auto &value : std::as_const(m_versions)) {
+        const QJsonObject version = value.toObject();
+        const QString id = jsonId(version.value(QStringLiteral("id")));
+        if (id == fromId) from = version;
+        if (toId.isEmpty() ? version.value(QStringLiteral("current")).toBool() : id == toId) to = version;
+    }
+    if (from.isEmpty() || to.isEmpty() || from == to)
+        return;
+    if (from.value(QStringLiteral("version_number")).toInt() > to.value(QStringLiteral("version_number")).toInt())
+        std::swap(from, to);
+    m_compareFrom = from;
+    m_compareTo = to;
+    m_compareBefore = m_compareAfter = QString();
+    m_errorCode.clear();
+    const int generation = m_generation, compared = ++m_compareGeneration;
+    const auto current = [this, generation, compared] { return live(generation) && compared == m_compareGeneration; };
+    m_comparePending = 2;
+    emit changed();
+    const auto read = [this, current](const QJsonObject &version, QString &into) {
+        readVersion(jsonId(version.value(QStringLiteral("id"))), current, [this, &into](const QString &text, const QString &code) {
+            --m_comparePending;
+            if (!code.isEmpty()) {
+                fail(code);
+                return;
+            }
+            into = text.isNull() ? QStringLiteral("") : text;
+            emit changed();
+        });
+    };
+    read(from, m_compareBefore);
+    read(to, m_compareAfter);
+}
+
+void DocumentView::stopComparing()
+{
+    if (m_compareFrom.isEmpty())
+        return;
+    ++m_compareGeneration;
+    m_comparePending = 0;
+    m_compareFrom = m_compareTo = {};
+    m_compareBefore = m_compareAfter = QString();
+    emit changed();
 }
 
 void DocumentView::loadMoreRelated(const QString &direction)
@@ -292,7 +369,7 @@ void DocumentView::loadRelated(const QString &direction)
     m_relatedAsked = true;
     ++m_pending;
     emit changed();
-    m_backend.request("GET", documentPath(QStringLiteral("/references?") + query.toString(QUrl::FullyEncoded)), {}, {},
+    m_backend.request("GET", documentPath(QStringLiteral("references?") + query.toString(QUrl::FullyEncoded)), {}, {},
                       [this, generation, more](const Client::Reply &reply) {
         if (!live(generation)) return;
         --m_pending;
@@ -339,7 +416,7 @@ void DocumentView::save(const QString &text, const QString &reason, bool paths, 
         return;
     const QByteArray bytes = text.toUtf8();
     const bool markdown = kind() == QLatin1String("markdown");
-    QJsonObject descriptor{{QStringLiteral("space_id"), m_spaceId}, {QStringLiteral("document_id"), m_documentId},
+    QJsonObject descriptor{{QStringLiteral("space_id"), m_spaceId}, {QStringLiteral("item_id"), m_documentId},
                            {QStringLiteral("filename"), m_version.value(QStringLiteral("filename"))},
                            {QStringLiteral("content_type"), m_version.value(QStringLiteral("content_type"))}};
     if (!reason.trimmed().isEmpty())
@@ -366,6 +443,7 @@ void DocumentView::save(const QString &text, const QString &reason, bool paths, 
         const QJsonValue review = reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("review"));
         m_notice = !review.isObject() ? QStringLiteral("version_published")
                  : update ? QStringLiteral("review_updated") : QStringLiteral("review_requested");
+        m_editing = false;
         emit saved(jsonId(review.toObject().value(QStringLiteral("id"))));
         m_session.documents()->reload();
         load();
@@ -396,13 +474,16 @@ bool DocumentView::allows(QByteArrayView id) const
     if (!m_active)
         return false;
     const bool idle = !busy();
-    const bool editing = m_tab == QLatin1String("edit") && editable() && idle;
-    if (id == "view-tab" || id == "versions-tab" || id == "related-tab") return true;
-    if (id == "edit-tab") return editable();
-    if (id == "reviews-tab") return m_extraTabs.contains(QStringLiteral("reviews"));
+    const bool editing = m_editing && editable() && idle;
+    const bool reading = !m_editing && m_compareFrom.isEmpty();
+    if (id == "view-tab" || id == "versions-tab" || id == "related-tab") return reading;
+    if (id == "reviews-tab") return reading && m_extraTabs.contains(QStringLiteral("reviews"));
+    if (id == "edit-document") return reading && editable();
     if (id == "download-version") return idle && !m_version.isEmpty();
     if (id == "save-document" || id == "discard-changes") return editing;
     if (id == "insert-image") return editing && kind() == QLatin1String("markdown");
+    if (id == "write-mode") return m_editing;
+    if (id == "preview-mode" || id == "split-mode") return m_editing && kind() == QLatin1String("markdown");
     return false;
 }
 
@@ -410,11 +491,16 @@ void DocumentView::perform(QByteArrayView id)
 {
     if (!allows(id))
         return;
-    if (id.endsWith("-tab"))
+    if (id.endsWith("-tab")) {
         setTab(QString::fromLatin1(id.chopped(4)));
-    else if (id == "download-version")
+    } else if (id == "edit-document") {
+        m_editing = true;
+        m_tab = QStringLiteral("view");
+        emit changed();
+    } else if (id == "download-version") {
         m_session.documents()->download(m_documentId, versionId());
-    else
+    } else {
         emit requested(QString::fromLatin1(id));
+    }
 }
 }

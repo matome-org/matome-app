@@ -117,7 +117,7 @@ void FolderModel::reload(const QString &settled)
     }
     const int generation = ++m_generation;
     setBusy();
-    m_session.authedList(m_session.spacePath(QStringLiteral("folders")), QStringLiteral("folders"),
+    m_session.authedList(m_session.spaceItemsPath(QStringLiteral("kind=folder")), QStringLiteral("items"),
                          [this, generation] { return generation == m_generation; },
                          [this, settled](const Client::Reply &reply, const QJsonArray &list) {
                              applyList(reply, list, settled);
@@ -135,11 +135,12 @@ void FolderModel::create(const QString &name)
     }
     const int generation = ++m_generation;
     setBusy();
-    QJsonObject body;
-    body.insert(QStringLiteral("name"), trimmed);
+    QJsonObject body{{QStringLiteral("kind"), QStringLiteral("folder")},
+                     {QStringLiteral("space_id"), m_session.currentSpaceId()},
+                     {QStringLiteral("name"), trimmed}};
     if (!m_currentFolderId.isEmpty())
         body.insert(QStringLiteral("parent_id"), m_currentFolderId);
-    m_session.authedPost(m_session.spacePath(QStringLiteral("folders")), body, idempotencyHeader(),
+    m_session.authedPost(itemsPath(m_session.currentOrgId()), body, idempotencyHeader(),
                          [this, generation](const Client::Reply &reply) {
                              if (generation != m_generation)
                                  return;
@@ -175,14 +176,9 @@ void FolderModel::move(const QString &folderId, const QString &parentId, int rev
     }
     const int generation = ++m_generation;
     setBusy();
-    QJsonObject body;
-    if (parentId.isEmpty())
-        body.insert(QStringLiteral("parent_id"), QJsonValue::Null);
-    else
-        body.insert(QStringLiteral("parent_id"), parentId);
-    const QString path = m_session.spacePath(QStringLiteral("folders/%1/move").arg(folderId));
-    m_session.authedPost(path, body, idempotentMatchHeader(revision),
-                         [this, generation](const Client::Reply &reply) { finish(generation, reply); });
+    QJsonObject body{{QStringLiteral("destination"), m_session.moveDestination(parentId)}};
+    m_session.authedPatch(itemPath(m_session.currentOrgId(), folderId), body, idempotentMatchHeader(revision),
+                          [this, generation](const Client::Reply &reply) { finish(generation, reply); });
 }
 
 void FolderModel::rename(const QString &folderId, const QString &name, int revision)
@@ -196,22 +192,26 @@ void FolderModel::rename(const QString &folderId, const QString &name, int revis
     }
     const int generation = ++m_generation;
     setBusy();
-    QJsonObject body;
-    body.insert(QStringLiteral("name"), trimmed);
-    m_session.authedPatch(m_session.spacePath(QStringLiteral("folders/%1").arg(folderId)), body,
-                          matchHeader(revision),
+    QJsonObject body{{QStringLiteral("name"), trimmed}};
+    m_session.authedPatch(itemPath(m_session.currentOrgId(), folderId), body, idempotentMatchHeader(revision),
                           [this, generation](const Client::Reply &reply) { finish(generation, reply); });
 }
 
-void FolderModel::remove(const QString &folderId, int revision)
+void FolderModel::trash(const QString &folderId, int revision)
 {
     if (m_busy || folderId.isEmpty() || !m_session.inSpace())
         return;
     const int generation = ++m_generation;
     setBusy();
-    m_session.authedDelete(m_session.spacePath(QStringLiteral("folders/%1").arg(folderId)),
-                           matchHeader(revision),
-                           [this, generation](const Client::Reply &reply) { finish(generation, reply); });
+    QJsonObject body{{QStringLiteral("state"), QStringLiteral("trashed")}};
+    m_session.authedPatch(itemPath(m_session.currentOrgId(), folderId), body, idempotentMatchHeader(revision),
+                          [this, generation, folderId](const Client::Reply &reply) {
+                              if (reply.ok) {
+                                  const QJsonObject item = reply.json.value(QStringLiteral("item")).toObject();
+                                  emit trashed(folderId, item.value(QStringLiteral("revision")).toInt());
+                              }
+                              finish(generation, reply);
+                          });
 }
 
 void FolderModel::clear()

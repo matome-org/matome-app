@@ -38,10 +38,10 @@ int DocumentModel::revisionOf(const QString &documentId) const
     return row ? row->revision : 0;
 }
 
-QString DocumentModel::titleOf(const QString &documentId) const
+QString DocumentModel::nameOf(const QString &documentId) const
 {
     const DocumentRow *row = find(documentId);
-    return row ? row->title : QString();
+    return row ? row->name : QString();
 }
 
 bool DocumentModel::controlledOf(const QString &documentId) const
@@ -63,10 +63,10 @@ QVariant DocumentModel::data(const QModelIndex &index, int role) const
     switch (role) {
     case DocumentIdRole:
         return row.id;
-    case FolderIdRole:
-        return row.folderId;
-    case TitleRole:
-        return row.title;
+    case ParentIdRole:
+        return row.parentId;
+    case NameRole:
+        return row.name;
     case ByteSizeRole:
         return row.byteSize;
     case RevisionRole:
@@ -81,8 +81,8 @@ QVariant DocumentModel::data(const QModelIndex &index, int role) const
 QHash<int, QByteArray> DocumentModel::roleNames() const
 {
     return {{DocumentIdRole, "documentId"},
-            {FolderIdRole, "folderId"},
-            {TitleRole, "documentTitle"},
+            {ParentIdRole, "parentId"},
+            {NameRole, "name"},
             {ByteSizeRole, "byteSize"},
             {RevisionRole, "revision"},
             {ControlledRole, "controlled"}};
@@ -103,10 +103,10 @@ void DocumentModel::reload(const QString &settled)
     }
     const int generation = ++m_generation;
     setBusy();
-    const QString path = m_session.spacePath(QStringLiteral("documents"))
-            + QStringLiteral("?folder_id=")
-            + (folderId.isEmpty() ? QStringLiteral("root") : QUrl::toPercentEncoding(folderId));
-    m_session.authedList(path, QStringLiteral("documents"),
+    // The space root is the literal null, which Core reads as no parent.
+    const QString path = m_session.spaceItemsPath(QStringLiteral("kind=document&parent_id=")
+            + (folderId.isEmpty() ? QStringLiteral("null") : QUrl::toPercentEncoding(folderId)));
+    m_session.authedList(path, QStringLiteral("items"),
                          [this, generation] { return generation == m_generation; },
                          [this, settled](const Client::Reply &reply, const QJsonArray &list) {
                              applyList(reply, list, settled);
@@ -126,10 +126,10 @@ void DocumentModel::download(const QString &documentId, const QString &versionId
     if (m_busy || documentId.isEmpty() || !m_session.inSpace())
         return;
     select(documentId);
-    const QString title = titleOf(documentId);
+    const QString title = nameOf(documentId);
     const int generation = ++m_generation;
     setBusy();
-    QString path = m_session.spacePath(QStringLiteral("documents/%1/download").arg(documentId));
+    QString path = itemPath(m_session.currentOrgId(), documentId, QStringLiteral("download"));
     if (!versionId.isEmpty())
         path += QStringLiteral("?version_id=") + versionId;
     m_session.authedGet(path, [this, generation, title](const Client::Reply &reply) {
@@ -194,20 +194,14 @@ void DocumentModel::move(const QString &documentId, const QString &folderId, int
         return;
     const int generation = ++m_generation;
     setBusy();
-    QJsonObject body;
-    body.insert(QStringLiteral("space_id"), m_session.currentSpaceId());
-    if (folderId.isEmpty())
-        body.insert(QStringLiteral("folder_id"), QJsonValue::Null);
-    else
-        body.insert(QStringLiteral("folder_id"), folderId);
-    const QString path = m_session.spacePath(QStringLiteral("documents/%1/move").arg(documentId));
-    m_session.authedPost(path, body, idempotentMatchHeader(revision),
-                         [this, generation](const Client::Reply &reply) { finish(generation, reply); });
+    QJsonObject body{{QStringLiteral("destination"), m_session.moveDestination(folderId)}};
+    m_session.authedPatch(itemPath(m_session.currentOrgId(), documentId), body, idempotentMatchHeader(revision),
+                          [this, generation](const Client::Reply &reply) { finish(generation, reply); });
 }
 
-void DocumentModel::rename(const QString &documentId, const QString &title, int revision)
+void DocumentModel::rename(const QString &documentId, const QString &name, int revision)
 {
-    const QString trimmed = title.trimmed();
+    const QString trimmed = name.trimmed();
     if (m_busy || documentId.isEmpty() || !m_session.inSpace())
         return;
     if (trimmed.isEmpty()) {
@@ -216,10 +210,8 @@ void DocumentModel::rename(const QString &documentId, const QString &title, int 
     }
     const int generation = ++m_generation;
     setBusy();
-    QJsonObject body;
-    body.insert(QStringLiteral("title"), trimmed);
-    m_session.authedPatch(m_session.spacePath(QStringLiteral("documents/%1").arg(documentId)), body,
-                          matchHeader(revision),
+    QJsonObject body{{QStringLiteral("name"), trimmed}};
+    m_session.authedPatch(itemPath(m_session.currentOrgId(), documentId), body, idempotentMatchHeader(revision),
                           [this, generation](const Client::Reply &reply) { finish(generation, reply); });
 }
 
@@ -229,16 +221,15 @@ void DocumentModel::trash(const QString &documentId, int revision)
         return;
     const int generation = ++m_generation;
     setBusy();
-    m_session.authedDelete(m_session.spacePath(QStringLiteral("documents/%1").arg(documentId)),
-                           matchHeader(revision),
-                           [this, generation, documentId](const Client::Reply &reply) {
-                               if (reply.ok) {
-                                   const QJsonObject document =
-                                           reply.json.value(QStringLiteral("document")).toObject();
-                                   emit trashed(documentId, document.value(QStringLiteral("revision")).toInt());
-                               }
-                               finish(generation, reply);
-                           });
+    QJsonObject body{{QStringLiteral("state"), QStringLiteral("trashed")}};
+    m_session.authedPatch(itemPath(m_session.currentOrgId(), documentId), body, idempotentMatchHeader(revision),
+                          [this, generation, documentId](const Client::Reply &reply) {
+                              if (reply.ok) {
+                                  const QJsonObject item = reply.json.value(QStringLiteral("item")).toObject();
+                                  emit trashed(documentId, item.value(QStringLiteral("revision")).toInt());
+                              }
+                              finish(generation, reply);
+                          });
 }
 
 void DocumentModel::clear()
@@ -324,10 +315,11 @@ DocumentRow DocumentModel::parseRow(const QJsonObject &json)
 {
     DocumentRow row;
     row.id = jsonId(json.value(QStringLiteral("id")));
-    row.folderId = jsonId(json.value(QStringLiteral("folder_id")));
-    row.title = json.value(QStringLiteral("title")).toString();
-    row.controlled = json.value(QStringLiteral("controlled_docs_enabled")).toBool();
-    const QJsonValue version = json.value(QStringLiteral("current_version"));
+    row.parentId = jsonId(json.value(QStringLiteral("parent_id")));
+    row.name = json.value(QStringLiteral("name")).toString();
+    const QJsonObject document = json.value(QStringLiteral("document")).toObject();
+    row.controlled = document.value(QStringLiteral("controlled_docs_enabled")).toBool();
+    const QJsonValue version = document.value(QStringLiteral("current_version"));
     if (version.isObject())
         row.byteSize = QString::number(version.toObject().value(QStringLiteral("byte_size")).toInteger());
     row.revision = json.value(QStringLiteral("revision")).toInt(1);

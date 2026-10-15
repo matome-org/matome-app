@@ -136,4 +136,16 @@ inline QString contentPath(const QString &orgId, const QString &spaceId, const Q
     return orgPath(orgId, QStringLiteral("spaces/%1/%2").arg(spaceId, leaf));
 }
 
+// The folders and documents of an organization, as one collection.
+inline QString itemsPath(const QString &orgId)
+{
+    return orgPath(orgId, QStringLiteral("items"));
+}
+
+// One folder or document, or a sub-resource of it such as "versions".
+inline QString itemPath(const QString &orgId, const QString &itemId, const QString &leaf = {})
+{
+    return itemsPath(orgId) + QLatin1Char('/') + itemId + (leaf.isEmpty() ? QString() : QStringLiteral("/") + leaf);
+}
+
 } // namespace matome

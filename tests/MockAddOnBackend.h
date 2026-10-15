@@ -5,6 +5,9 @@
 #include <QQueue>
 #include <QTimer>
 
+#include <functional>
+#include <optional>
+
 namespace matome::test {
 class MockAddOnBackend final : public AddOnBackend
 {
@@ -21,6 +24,9 @@ public:
     int delayMs = 0;
     // Whether a transfer reports its progress (the browser's fetch does not).
     bool reportsProgress = true;
+    // Answers a request from the test's own state, for paths whose ids a
+    // run creates; a reply it gives wins over `respond`.
+    std::function<std::optional<Client::Reply>(const QByteArray &method, const QString &path)> resolve;
 
     void respond(const QByteArray &method, const QString &path, const QJsonObject &json,
                  int status = 200, const QString &code = {})
@@ -51,6 +57,11 @@ public:
                  const Client::Headers &headers, Client::Done done) override
     {
         calls.append({method, path, body, headers, {}});
+        if (resolve)
+            if (const auto reply = resolve(method, path)) {
+                answer(*reply, std::move(done));
+                return;
+            }
         deliver(method + ' ' + path.toUtf8(), std::move(done));
     }
 
@@ -79,7 +90,10 @@ private:
         Client::Reply missing;
         missing.status = 404;
         missing.code = QStringLiteral("not_found");
-        const auto reply = m_queued[key].isEmpty() ? m_replies.value(key, missing) : m_queued[key].dequeue();
+        answer(m_queued[key].isEmpty() ? m_replies.value(key, missing) : m_queued[key].dequeue(), std::move(done));
+    }
+    void answer(const Client::Reply &reply, Client::Done done)
+    {
         QTimer::singleShot(delayMs, this, [done, reply] { done(reply); });
     }
     QHash<QByteArray, Client::Reply> m_replies;

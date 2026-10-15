@@ -141,4 +141,9 @@ QString Clipboard::imageName() const
     const QString path = imageFile();
     return path.startsWith(QLatin1String("/qt/tmp/")) ? QString() : QFileInfo(path).fileName();
 }
+
+void Clipboard::setText(const QString &text) const
+{
+    QGuiApplication::clipboard()->setText(text);
+}
 }

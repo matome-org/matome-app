@@ -18,6 +18,7 @@
 #include <QTcpSocket>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QUuid>
 
 #include <algorithm>
 #include <optional>
@@ -107,13 +108,22 @@ public:
         }
     }
 
-    void seedDocument(const QString &spaceId, const QString &title, const QString &folderId = {},
-                      const std::optional<QByteArray> &content = std::nullopt)
+    /// Adds a folder named `name` under `parentId` (the space root when
+    /// empty) and returns its UUID.
+    QString seedFolder(const QString &spaceId, const QString &parentId, const QString &name)
     {
-        addDocument(spaceId, title, folderId, content);
+        return addFolder(spaceId, parentId, name).value(QStringLiteral("id")).toString();
     }
 
-    /// What `GET …/documents/:id/references` answers in `data` for `documentId`;
+    /// Adds a document named `name` under `parentId` (the space root when
+    /// empty), with `content` published as its first version, and returns its UUID.
+    QString seedDocument(const QString &spaceId, const QString &name, const QString &parentId = {},
+                         const std::optional<QByteArray> &content = std::nullopt)
+    {
+        return addDocument(spaceId, name, parentId, content).value(QStringLiteral("id")).toString();
+    }
+
+    /// What `GET …/items/:id/references` answers in `data` for `documentId`;
     /// both directions are empty until seeded.
     void seedReferences(const QString &documentId, const QJsonObject &data) { m_references.insert(documentId, data); }
 
@@ -209,71 +219,71 @@ public:
         return id;
     }
 
-    /// Puts the tag `tagId` of `orgId` on the document titled `title` in
+    /// Puts the tag `tagId` of `orgId` on the document named `name` in
     /// `spaceId`, as Core lists it in the document's `tag_assignments`.
-    void seedDocumentTag(const QString &orgId, const QString &spaceId, const QString &title, const QString &tagId)
+    void seedDocumentTag(const QString &orgId, const QString &spaceId, const QString &name, const QString &tagId)
     {
         const QJsonObject tag = byId(m_tags.value(orgId), tagId);
-        QJsonArray &documents = m_documents[spaceId];
-        for (qsizetype at = 0; at < documents.size(); ++at) {
-            QJsonObject doc = documents.at(at).toObject();
-            if (doc.value(QStringLiteral("title")).toString() != title)
+        QJsonArray &items = m_items[spaceId];
+        for (qsizetype at = 0; at < items.size(); ++at) {
+            QJsonObject item = items.at(at).toObject();
+            if (item.value(QStringLiteral("kind")).toString() != QLatin1String("document")
+                || item.value(QStringLiteral("name")).toString() != name)
                 continue;
-            QJsonArray assignments = doc.value(QStringLiteral("tag_assignments")).toArray();
-            assignments.append(QJsonObject{{QStringLiteral("name"), tag.value(QStringLiteral("name"))}, {QStringLiteral("tag_id"), tagId},
-                                           {QStringLiteral("source"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("manual")},
-                                                                                  {QStringLiteral("id"), QJsonValue::Null}}}});
-            doc.insert(QStringLiteral("tag_assignments"), assignments);
-            documents.replace(at, doc);
+            QJsonArray assignments = facetOf(item).value(QStringLiteral("tag_assignments")).toArray();
+            assignments.append(tagAssignment(tag, tagId));
+            setFacet(item, QStringLiteral("tag_assignments"), assignments);
+            items.replace(at, item);
         }
     }
 
-    /// The live document titled `title`, with the checksum of its stored bytes.
-    QJsonObject documentTitled(const QString &title) const
+    /// The live document named `name`, with the checksum of its stored bytes.
+    QJsonObject documentTitled(const QString &name) const
     {
-        for (const QJsonArray &list : m_documents) {
+        for (const QJsonArray &list : m_items) {
             for (const QJsonValue &value : list) {
-                if (value.toObject().value(QStringLiteral("title")).toString() == title)
+                if (value.toObject().value(QStringLiteral("kind")).toString() == QLatin1String("document")
+                    && value.toObject().value(QStringLiteral("name")).toString() == name)
                     return withContent(value.toObject());
             }
         }
         return {};
     }
 
-    /// Someone else renames the folder named or the live document titled
-    /// `from` to `to`, which moves its revision on.
+    /// Someone else renames the folder or document named `from` to `to`,
+    /// which moves its revision on.
     void renameElsewhere(const QString &from, const QString &to)
     {
-        const auto renameIn = [&](QHash<QString, QJsonArray> &bySpace, const QString &field) {
-            for (QJsonArray &list : bySpace) {
-                for (int at = 0; at < list.size(); ++at) {
-                    QJsonObject item = list.at(at).toObject();
-                    if (item.value(field).toString() != from)
-                        continue;
-                    item.insert(field, to);
-                    list.replace(at, bumped(item));
-                }
+        for (QJsonArray &list : m_items) {
+            for (int at = 0; at < list.size(); ++at) {
+                QJsonObject item = list.at(at).toObject();
+                if (item.value(QStringLiteral("name")).toString() != from)
+                    continue;
+                item.insert(QStringLiteral("name"), to);
+                list.replace(at, bumped(item));
             }
-        };
-        renameIn(m_folders, QStringLiteral("name"));
-        renameIn(m_documents, QStringLiteral("title"));
-    }
-
-    /// Someone else changes the trashed document titled `title`, which
-    /// moves its revision on.
-    void changeTrashedElsewhere(const QString &title)
-    {
-        for (QJsonObject &doc : m_trashed) {
-            if (doc.value(QStringLiteral("title")).toString() == title)
-                doc = bumped(doc);
         }
     }
 
-    /// The checksum of the bytes held for the document titled `title`; empty
-    /// before they land.
-    QString landed(const QString &title) const
+    /// Someone else changes the trashed item named `name`, which moves its
+    /// revision on.
+    void changeTrashedElsewhere(const QString &name)
     {
-        return documentTitled(title).value(QStringLiteral("content_sha256")).toString();
+        for (QJsonArray &list : m_items) {
+            for (int at = 0; at < list.size(); ++at) {
+                const QJsonObject item = list.at(at).toObject();
+                if (item.value(QStringLiteral("state")).toString() == QLatin1String("trashed")
+                    && item.value(QStringLiteral("name")).toString() == name)
+                    list.replace(at, bumped(item));
+            }
+        }
+    }
+
+    /// The checksum of the bytes held for the document named `name`; empty
+    /// before they land.
+    QString landed(const QString &name) const
+    {
+        return documentTitled(name).value(QStringLiteral("content_sha256")).toString();
     }
 
     /// The next `count` requests whose method is `method` (any when empty)
@@ -327,14 +337,20 @@ public:
                 orgs.append(org);
             }
         }
+        QJsonArray folders;
         QJsonArray documents;
-        for (const QString &spaceId : sortedKeys(m_documents)) {
-            for (const QJsonValue &value : m_documents.value(spaceId))
-                documents.append(withContent(value.toObject()));
-        }
         QJsonArray trash;
-        for (const QString &id : sortedKeys(m_trashed))
-            trash.append(withContent(m_trashed.value(id)));
+        for (const QString &spaceId : sortedKeys(m_items)) {
+            for (const QJsonValue &value : m_items.value(spaceId)) {
+                const QJsonObject item = value.toObject();
+                if (item.value(QStringLiteral("state")).toString() == QLatin1String("trashed"))
+                    trash.append(withContent(item));
+                else if (item.value(QStringLiteral("kind")).toString() == QLatin1String("folder"))
+                    folders.append(item);
+                else
+                    documents.append(withContent(item));
+            }
+        }
         QJsonArray faults;
         for (const Fault &fault : m_faults) {
             faults.append(QJsonObject{{QStringLiteral("method"), QString::fromUtf8(fault.method)},
@@ -346,7 +362,7 @@ public:
                 {QStringLiteral("users"), QJsonArray::fromStringList(sortedKeys(m_passwords))},
                 {QStringLiteral("organizations"), orgs},
                 {QStringLiteral("spaces"), flatten(m_spaces)},
-                {QStringLiteral("folders"), flatten(m_folders)},
+                {QStringLiteral("folders"), folders},
                 {QStringLiteral("documents"), documents},
                 {QStringLiteral("trash"), trash},
                 {QStringLiteral("faults"), faults},
@@ -394,8 +410,7 @@ public:
         m_invitations.clear();
         m_nextPerson = 0;
         m_spaces.clear();
-        m_folders.clear();
-        m_documents.clear();
+        m_items.clear();
         m_lastPath.clear();
         m_lastQuery.clear();
         m_lastBody.clear();
@@ -406,13 +421,13 @@ public:
         m_hits = 0;
         m_nextOrg = 0;
         m_nextSpace = 0;
-        m_nextFolder = 0;
-        m_nextDocument = 0;
         m_nextUpload = 0;
         m_nextVersion = 0;
         m_uploads.clear();
         m_blobs.clear();
-        m_trashed.clear();
+        m_reviews.clear();
+        m_history.clear();
+        m_versionReferences.clear();
     }
 
     bool confirmEmailInBrowser(const QString &email)
@@ -528,11 +543,11 @@ private:
         for (const QJsonValue &value : level.value(QStringLiteral("documents")).toArray()) {
             const QJsonObject doc = value.toObject();
             const QJsonValue content = doc.value(QStringLiteral("content"));
-            for (const QString &title : copies(doc, doc.value(QStringLiteral("title")).toString())) {
+            for (const QString &name : copies(doc, doc.value(QStringLiteral("name")).toString())) {
                 if (content.isString())
-                    addDocument(spaceId, title, parentId, content.toString().toUtf8());
+                    addDocument(spaceId, name, parentId, content.toString().toUtf8());
                 else
-                    addDocument(spaceId, title, parentId);
+                    addDocument(spaceId, name, parentId);
             }
         }
     }
@@ -796,143 +811,10 @@ private:
                 return *reply;
             if (const auto reply = spaceLifecycle(method, parts, json))
                 return *reply;
-            if (parts.size() >= 8 && parts.at(1) == QLatin1String("api")
-                && parts.at(2) == QLatin1String("v1") && parts.at(3) == QLatin1String("organizations")
-                && parts.at(5) == QLatin1String("spaces")) {
-                const QString spaceId = parts.at(6);
-                const QString kind = parts.at(7);
-                const QString itemId = parts.size() >= 9 ? parts.at(8) : QString();
-                const QString action = parts.size() >= 10 ? parts.at(9) : QString();
-                if (kind == QLatin1String("folders") && itemId.isEmpty()) {
-                    if (method == "GET")
-                        return listed(QStringLiteral("folders"), m_folders.value(spaceId));
-                    if (method == "POST") {
-                        const QString parentId = json.value(QStringLiteral("parent_id")).toString();
-                        const QString name = storedName(json.value(QStringLiteral("name")));
-                        if (const std::optional<QByteArray> refused = refuseName(spaceId, parentId, name))
-                            return *refused;
-                        return made(QStringLiteral("folder"), addFolder(spaceId, parentId, name));
-                    }
-                }
-                if (kind == QLatin1String("folders") && action == QLatin1String("move")) {
-                    const QString parentId = json.value(QStringLiteral("parent_id")).toString();
-                    const QJsonObject folder = byId(m_folders.value(spaceId), itemId);
-                    if (folder.isEmpty())
-                        return errorReply(404, QStringLiteral("not_found"));
-                    if (const std::optional<QByteArray> refused = refuseRevision(folder))
-                        return *refused;
-                    if (movesInside(spaceId, itemId, parentId))
-                        return errorReply(409, QStringLiteral("folder_cycle"));
-                    if (const std::optional<QByteArray> refused =
-                                refuseName(spaceId, parentId, folder.value(QStringLiteral("name")).toString(), itemId))
-                        return *refused;
-                    update(m_folders[spaceId], itemId,
-                           [&](QJsonObject &moved) { moved.insert(QStringLiteral("parent_id"), nullable(parentId)); });
-                    return single(QStringLiteral("folder"), m_folders.value(spaceId), itemId);
-                }
-                if (kind == QLatin1String("documents") && itemId.isEmpty()) {
-                    if (method == "GET") {
-                        const QString folderId = query().queryItemValue(QStringLiteral("folder_id"), QUrl::FullyDecoded);
-                        QJsonArray filtered;
-                        for (const QJsonValue &value : m_documents.value(spaceId)) {
-                            const QJsonObject doc = value.toObject();
-                            const QString docFolder = doc.value(QStringLiteral("folder_id")).toString();
-                            const bool root = folderId.isEmpty() || folderId == QLatin1String("root");
-                            if ((root && docFolder.isEmpty()) || (!root && docFolder == folderId))
-                                filtered.append(doc);
-                        }
-                        return listed(QStringLiteral("documents"), filtered);
-                    }
-                }
-                if (kind == QLatin1String("documents") && action == QLatin1String("controlled-docs") && method == "PUT")
-                    return enableControl(parts.at(4), spaceId, itemId);
-                if (kind == QLatin1String("documents") && action == QLatin1String("download")) {
-                    QJsonObject data;
-                    data.insert(QStringLiteral("url"), origin() + QStringLiteral("/files/") + itemId);
-                    data.insert(QStringLiteral("method"), QStringLiteral("GET"));
-                    return jsonReply(200, QJsonObject{{QStringLiteral("data"), data}});
-                }
-                if (kind == QLatin1String("documents") && action == QLatin1String("references") && method == "GET") {
-                    const QJsonObject none{{QStringLiteral("incoming"), QJsonObject{{QStringLiteral("references"), QJsonArray()},
-                                                                                    {QStringLiteral("hidden_count"), 0}}},
-                                           {QStringLiteral("outgoing"), QJsonObject{{QStringLiteral("references"), QJsonArray()}}}};
-                    return jsonReply(200, QJsonObject{{QStringLiteral("data"), m_references.value(itemId, none)}});
-                }
-                if (kind == QLatin1String("documents") && action == QLatin1String("move")) {
-                    const QString folderId = json.value(QStringLiteral("folder_id")).toString();
-                    const QJsonObject doc = byId(m_documents.value(spaceId), itemId);
-                    if (doc.isEmpty())
-                        return errorReply(404, QStringLiteral("not_found"));
-                    if (const std::optional<QByteArray> refused = refuseRevision(doc))
-                        return *refused;
-                    if (const std::optional<QByteArray> refused =
-                                refuseName(spaceId, folderId, doc.value(QStringLiteral("title")).toString(), itemId))
-                        return *refused;
-                    update(m_documents[spaceId], itemId,
-                           [&](QJsonObject &moved) { moved.insert(QStringLiteral("folder_id"), nullable(folderId)); });
-                    return single(QStringLiteral("document"), m_documents.value(spaceId), itemId);
-                }
-                if (kind == QLatin1String("folders") && !itemId.isEmpty() && action.isEmpty()) {
-                    if (method == "GET")
-                        return byId(m_folders.value(spaceId), itemId).isEmpty() ? errorReply(404, QStringLiteral("not_found"))
-                                                                               : single(QStringLiteral("folder"), m_folders.value(spaceId), itemId);
-                    if (method == "PATCH")
-                        return rename(QStringLiteral("folder"), m_folders, spaceId, itemId, json);
-                    if (method == "DELETE") {
-                        const QJsonObject folder = byId(m_folders.value(spaceId), itemId);
-                        if (folder.isEmpty())
-                            return errorReply(404, QStringLiteral("not_found"));
-                        if (const std::optional<QByteArray> refused = refuseRevision(folder))
-                            return *refused;
-                        if (holdsAnything(spaceId, itemId))
-                            return errorReply(409, QStringLiteral("non_empty_resource"));
-                        drop(m_folders[spaceId], itemId);
-                        return http(204, {});
-                    }
-                }
-                if (kind == QLatin1String("documents") && itemId.isEmpty() && method == "POST") {
-                    const QString folderId = json.value(QStringLiteral("folder_id")).toString();
-                    const QString title = storedName(json.value(QStringLiteral("title")));
-                    if (const std::optional<QByteArray> refused = refuseName(spaceId, folderId, title))
-                        return *refused;
-                    return made(QStringLiteral("document"), addDocument(spaceId, title, folderId));
-                }
-                if (kind == QLatin1String("documents") && method == "GET" && !itemId.isEmpty()
-                    && (action == QLatin1String("versions") || action == QLatin1String("reviews"))) {
-                    const QJsonObject doc = byId(m_documents.value(spaceId), itemId);
-                    if (doc.isEmpty())
-                        return errorReply(404, QStringLiteral("not_found"));
-                    if (action == QLatin1String("reviews"))
-                        return listed(QStringLiteral("reviews"), {});
-                    // Only the current version is kept, and it is published.
-                    QJsonArray versions;
-                    if (doc.value(QStringLiteral("current_version")).isObject()) {
-                        QJsonObject current = doc.value(QStringLiteral("current_version")).toObject();
-                        current.insert(QStringLiteral("publication_state"), QStringLiteral("published"));
-                        versions.append(current);
-                    }
-                    return listed(QStringLiteral("data"), versions);
-                }
-                if (kind == QLatin1String("documents") && !itemId.isEmpty() && action.isEmpty()) {
-                    if (method == "GET") {
-                        if (byId(m_documents.value(spaceId), itemId).isEmpty())
-                            return errorReply(404, QStringLiteral("not_found"));
-                        return single(QStringLiteral("document"), m_documents.value(spaceId), itemId);
-                    }
-                    if (method == "PATCH")
-                        return rename(QStringLiteral("document"), m_documents, spaceId, itemId, json);
-                    if (method == "DELETE") {
-                        const QJsonObject doc = byId(m_documents.value(spaceId), itemId);
-                        if (doc.isEmpty())
-                            return errorReply(404, QStringLiteral("not_found"));
-                        if (const std::optional<QByteArray> refused = refuseRevision(doc))
-                            return *refused;
-                        drop(m_documents[spaceId], itemId);
-                        m_trashed.insert(itemId, bumped(doc));
-                        return jsonReply(200, QJsonObject{{QStringLiteral("document"), m_trashed.value(itemId)}});
-                    }
-                }
-            }
+            if (const auto reply = reviewRoutes(method, parts, json))
+                return *reply;
+            if (const auto reply = itemRoutes(method, parts, json))
+                return *reply;
             if (m_lastPath.startsWith(orgPrefix) && m_lastPath.contains(QLatin1String("/uploads"))) {
                 const QStringList up = m_lastPath.split(QLatin1Char('/'));
                 if (method == "POST" && up.size() == 6 && up.at(5) == QLatin1String("uploads")) {
@@ -942,12 +824,12 @@ private:
                     static const QRegularExpression sha256Hex(QStringLiteral("^[0-9a-f]{64}$"));
                     if (!sha256Hex.match(checksum.toString()).hasMatch())
                         return errorReply(422, QStringLiteral("invalid_checksum"));
-                    QJsonArray &list = m_documents[json.value(QStringLiteral("space_id")).toString()];
-                    const int at = indexOf(list, jsonId(json.value(QStringLiteral("document_id"))));
+                    QJsonArray &list = m_items[json.value(QStringLiteral("space_id")).toString()];
+                    const int at = indexOf(list, jsonId(json.value(QStringLiteral("item_id"))));
                     if (at < 0)
                         return errorReply(404, QStringLiteral("not_found"));
                     QJsonObject doc = list.at(at).toObject();
-                    doc.insert(QStringLiteral("pending_version_id"), newVersionId());
+                    setFacet(doc, QStringLiteral("pending_version_id"), newVersionId());
                     list.replace(at, doc);
                     const QString uploadId = QStringLiteral("upl-%1").arg(++m_nextUpload);
                     m_uploads.insert(uploadId, json);
@@ -965,34 +847,6 @@ private:
                 }
                 if (method == "POST" && up.size() >= 7 && up.last() == QLatin1String("complete"))
                     return completeUpload(up.at(up.size() - 2), json.value(QStringLiteral("generation")));
-            }
-            if (m_lastPath.startsWith(orgPrefix) && m_lastPath.contains(QLatin1String("/trash/"))) {
-                const QStringList tr = m_lastPath.split(QLatin1Char('/'));
-                const QString action = tr.last();
-                const QString id = tr.size() >= 2 ? tr.at(tr.size() - 2) : QString();
-                if (action == QLatin1String("restore")) {
-                    if (!m_trashed.contains(id))
-                        return errorReply(404, QStringLiteral("not_found"));
-                    const QJsonObject doc = m_trashed.value(id);
-                    if (const std::optional<QByteArray> refused = refuseRevision(doc))
-                        return *refused;
-                    const QString spaceId = doc.value(QStringLiteral("space_id")).toString();
-                    if (const std::optional<QByteArray> refused =
-                                refuseName(spaceId, doc.value(QStringLiteral("folder_id")).toString(),
-                                           doc.value(QStringLiteral("title")).toString(), id))
-                        return *refused;
-                    m_documents[spaceId].append(bumped(m_trashed.take(id)));
-                    return jsonReply(200, QJsonObject{{QStringLiteral("status"), action}});
-                }
-                if (action == QLatin1String("purge")) {
-                    if (!m_trashed.contains(id))
-                        return errorReply(404, QStringLiteral("not_found"));
-                    if (const std::optional<QByteArray> refused = refuseRevision(m_trashed.value(id)))
-                        return *refused;
-                    m_trashed.remove(id);
-                    m_blobs.remove(id);
-                    return jsonReply(200, QJsonObject{{QStringLiteral("status"), action}});
-                }
             }
             return errorReply(404, QStringLiteral("not_found"));
         }
@@ -1085,27 +939,139 @@ private:
             return errorReply(422, QStringLiteral("verification_failed"));
         const QJsonObject upload = m_uploads.take(uploadId);
         const QString spaceId = upload.value(QStringLiteral("space_id")).toString();
-        const QString documentId = jsonId(upload.value(QStringLiteral("document_id")));
-        const bool stored = update(m_documents[spaceId], documentId, [&](QJsonObject &doc) {
-            const int number = doc.value(QStringLiteral("current_version")).toObject()
-                                       .value(QStringLiteral("version_number")).toInt() + 1;
-            doc.insert(QStringLiteral("current_version"),
-                       readyVersion(doc.value(QStringLiteral("pending_version_id")).toString(), number,
-                                    upload.value(QStringLiteral("filename")).toString(),
-                                    upload.value(QStringLiteral("content_type")).toString(), bytes));
-            doc.insert(QStringLiteral("pending_version_id"), QJsonValue(QJsonValue::Null));
-            // Publishing the version advances the document's revision, as Core does.
-            doc.insert(QStringLiteral("revision"), doc.value(QStringLiteral("revision")).toInt() + 1);
-        });
-        if (!stored)
+        const QString documentId = jsonId(upload.value(QStringLiteral("item_id")));
+        // A managed document keeps its published version: the upload opens
+        // a review of it, which needs one approval.
+        if (facetOf(byId(m_items.value(spaceId), documentId)).value(QStringLiteral("controlled_docs_enabled")).toBool()) {
+            const QString candidateId = newVersionId();
+            m_blobs.insert(candidateId, m_blobs.take(uploadId));
+            m_versionReferences.insert(candidateId, upload.value(QStringLiteral("references")).toArray());
+            const QJsonObject review{{QStringLiteral("id"), QStringLiteral("review-%1").arg(m_reviews.value(documentId).size() + 1)},
+                                     {QStringLiteral("space_id"), spaceId}, {QStringLiteral("item_id"), documentId},
+                                     {QStringLiteral("filename"), upload.value(QStringLiteral("filename"))},
+                                     {QStringLiteral("content_type"), upload.value(QStringLiteral("content_type"))},
+                                     {QStringLiteral("status"), QStringLiteral("open")}, {QStringLiteral("merge_state"), QStringLiteral("clean")},
+                                     {QStringLiteral("reason"), upload.value(QStringLiteral("reason"))},
+                                     {QStringLiteral("base_version_id"), upload.value(QStringLiteral("base_version_id"))},
+                                     {QStringLiteral("candidate_version_id"), candidateId}, {QStringLiteral("revision"), 1},
+                                     {QStringLiteral("approvals"), QJsonArray()},
+                                     {QStringLiteral("settings"), QJsonObject{{QStringLiteral("required_approvals"), 1}}},
+                                     {QStringLiteral("closed_at"), QJsonValue(QJsonValue::Null)},
+                                     {QStringLiteral("deciding_membership_id"), QJsonValue(QJsonValue::Null)},
+                                     {QStringLiteral("decision_comment"), QJsonValue(QJsonValue::Null)},
+                                     {QStringLiteral("inserted_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)}};
+            m_reviews[documentId].prepend(review);
+            update(m_items[spaceId], documentId, [](QJsonObject &doc) {
+                setFacet(doc, QStringLiteral("pending_version_id"), QJsonValue(QJsonValue::Null));
+            });
+            return jsonReply(200, QJsonObject{{QStringLiteral("data"), QJsonObject{{QStringLiteral("state"), QStringLiteral("uploaded")},
+                                                                                   {QStringLiteral("review"), review}}},
+                                              {QStringLiteral("request_id"), requestId()}});
+        }
+        const QString versionId = facetOf(byId(m_items.value(spaceId), documentId)).value(QStringLiteral("pending_version_id")).toString();
+        m_versionReferences.insert(versionId, upload.value(QStringLiteral("references")).toArray());
+        if (!publish(spaceId, documentId, versionId, upload.value(QStringLiteral("filename")).toString(),
+                     upload.value(QStringLiteral("content_type")).toString(), m_blobs.take(uploadId)))
             return errorReply(404, QStringLiteral("not_found"));
-        m_blobs.insert(documentId, m_blobs.take(uploadId));
         return jsonReply(200, QJsonObject{{QStringLiteral("data"),
                                            QJsonObject{{QStringLiteral("state"), QStringLiteral("uploaded")}}},
                                           {QStringLiteral("request_id"), requestId()}});
     }
 
     QString newVersionId() { return QStringLiteral("version-%1").arg(++m_nextVersion); }
+
+    // Publishes `bytes` as the document's next version `versionId`, kept in
+    // its history and readable by version.
+    bool publish(const QString &spaceId, const QString &documentId, const QString &versionId,
+                 const QString &filename, const QString &contentType, const QByteArray &bytes)
+    {
+        QJsonObject published;
+        const bool stored = update(m_items[spaceId], documentId, [&](QJsonObject &doc) {
+            const int number = facetOf(doc).value(QStringLiteral("current_version")).toObject()
+                                       .value(QStringLiteral("version_number")).toInt() + 1;
+            published = readyVersion(versionId, number, filename, contentType, bytes);
+            setCurrentVersion(doc, published);
+            setFacet(doc, QStringLiteral("pending_version_id"), QJsonValue(QJsonValue::Null));
+            // Publishing the version advances the document's revision, as Core does.
+            doc.insert(QStringLiteral("revision"), doc.value(QStringLiteral("revision")).toInt() + 1);
+        });
+        if (!stored)
+            return false;
+        m_history[documentId].append(published);
+        m_blobs.insert(documentId, bytes);
+        m_blobs.insert(versionId, bytes);
+        return true;
+    }
+
+    // A review by id, and the document whose reviews hold it.
+    std::pair<QString, int> findReview(const QString &reviewId) const
+    {
+        for (auto it = m_reviews.cbegin(); it != m_reviews.cend(); ++it) {
+            const int at = indexOf(it.value(), reviewId);
+            if (at >= 0)
+                return {it.key(), at};
+        }
+        return {{}, -1};
+    }
+
+    // What a version links, as its upload declared it, against another:
+    // the links only one of them holds.
+    QJsonArray referencesOnlyIn(const QString &versionId, const QString &otherId) const
+    {
+        const QJsonArray other = m_versionReferences.value(otherId);
+        QJsonArray only;
+        for (const QJsonValue &value : m_versionReferences.value(versionId)) {
+            if (!other.contains(value))
+                only.append(value);
+        }
+        return only;
+    }
+
+    // `/organizations/:org/reviews/:id/…`: a review's diff (its reference
+    // changes), its candidate's download, and its approve, reject and cancel
+    // actions; an approval publishes the candidate.
+    std::optional<QByteArray> reviewRoutes(const QByteArray &method, const QStringList &parts, const QJsonObject &json)
+    {
+        if (parts.size() < 8 || parts.at(5) != QLatin1String("reviews"))
+            return std::nullopt;
+        const auto [documentId, at] = findReview(parts.at(6));
+        if (at < 0)
+            return errorReply(404, QStringLiteral("not_found"));
+        QJsonObject review = m_reviews.value(documentId).at(at).toObject();
+        const QString action = parts.mid(7).join(QLatin1Char('/'));
+        const QString base = review.value(QStringLiteral("base_version_id")).toString();
+        const QString candidate = review.value(QStringLiteral("candidate_version_id")).toString();
+        if (method == "GET" && action == QLatin1String("diff"))
+            return jsonReply(200, {{QStringLiteral("data"), QJsonObject{
+                {QStringLiteral("format"), QStringLiteral("unified")}, {QStringLiteral("diff"), QString()},
+                {QStringLiteral("references"), QJsonObject{{QStringLiteral("added"), referencesOnlyIn(candidate, base)},
+                                                           {QStringLiteral("removed"), referencesOnlyIn(base, candidate)},
+                                                           {QStringLiteral("changed"), QJsonArray()}}}}}});
+        if (method == "GET" && action == QLatin1String("candidate/download"))
+            return jsonReply(200, {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), origin() + QStringLiteral("/files/") + candidate}}}});
+        static const QHash<QString, QString> outcomes{{QStringLiteral("approve"), QStringLiteral("approved")},
+                                                      {QStringLiteral("reject"), QStringLiteral("rejected")},
+                                                      {QStringLiteral("cancel"), QStringLiteral("cancelled")}};
+        if (method != "POST" || !outcomes.contains(action))
+            return errorReply(404, QStringLiteral("not_found"));
+        if (review.value(QStringLiteral("status")).toString() != QLatin1String("open"))
+            return errorReply(409, QStringLiteral("review_closed"));
+        if (const std::optional<QByteArray> refused = refuseItemRevision(review, json))
+            return *refused;
+        review.insert(QStringLiteral("status"), outcomes.value(action));
+        review.insert(QStringLiteral("revision"), review.value(QStringLiteral("revision")).toInt() + 1);
+        // The terminal fields sit on the review itself, as Core returns them.
+        const QString comment = json.value(QStringLiteral("comment")).toString();
+        review.insert(QStringLiteral("closed_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+        review.insert(QStringLiteral("deciding_membership_id"), myMembership(parts.at(4)).value(QStringLiteral("id")));
+        review.insert(QStringLiteral("decision_comment"), comment.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(comment));
+        m_reviews[documentId].replace(at, review);
+        if (action == QLatin1String("approve"))
+            publish(review.value(QStringLiteral("space_id")).toString(), documentId, candidate,
+                    review.value(QStringLiteral("filename")).toString(), review.value(QStringLiteral("content_type")).toString(),
+                    m_blobs.value(candidate));
+        return jsonReply(200, {{QStringLiteral("data"), review}});
+    }
 
     // The `number`th version of a document, ready and current, holding `bytes`.
     static QJsonObject readyVersion(const QString &id, int number, const QString &filename,
@@ -1243,6 +1209,10 @@ private:
                 if (product.value(QStringLiteral("key")).toString() != key) continue;
                 QJsonObject installation = product.value(QStringLiteral("installation")).toObject();
                 m_addOnRequest = json;
+                if (method == "PATCH" || method == "DELETE") {
+                    if (const std::optional<QByteArray> refused = refuseItemRevision(installation, json))
+                        return refused;
+                }
                 if (method == "PATCH") {
                     QJsonObject settings = installation.value(QStringLiteral("settings")).toObject();
                     const auto patch = json.value(QStringLiteral("settings")).toObject();
@@ -1250,9 +1220,9 @@ private:
                     installation.insert(QStringLiteral("settings"), settings);
                 }
                 // An uninstall marks the installation uninstalled, its roles'
-                // grants and space activations kept; a pause leaves an
-                // uninstalled one so; a PUT reactivates either. A new
-                // installation answers for the installer's membership.
+                // grants and space activations kept; a PATCH to paused pauses
+                // it, leaving an uninstalled one so; a PUT reactivates either.
+                // A new installation answers for the installer's membership.
                 if (method == "PUT") {
                     const QJsonValue responsible = json.contains(QStringLiteral("responsible_membership_id"))
                             ? json.value(QStringLiteral("responsible_membership_id"))
@@ -1268,7 +1238,8 @@ private:
                     installation.insert(QStringLiteral("responsible_membership_id"), json.value(QStringLiteral("responsible_membership_id")));
                 } else if (method == "DELETE") {
                     installation.insert(QStringLiteral("status"), QStringLiteral("uninstalled"));
-                } else if (method != "PATCH" && installation.value(QStringLiteral("status")) != QLatin1String("uninstalled")) {
+                } else if (method == "PATCH" && json.value(QStringLiteral("status")) == QLatin1String("paused")
+                           && installation.value(QStringLiteral("status")) != QLatin1String("uninstalled")) {
                     installation.insert(QStringLiteral("status"), QStringLiteral("paused"));
                 }
                 installation.insert(QStringLiteral("revision"), installation.value(QStringLiteral("revision")).toInt() + 1);
@@ -1545,13 +1516,14 @@ private:
         return roles;
     }
 
-    // Renaming a space (`PATCH …/spaces/:id`) and archiving it (`POST
-    // …/spaces/:id/archive`), as Core does for an active space.
+    // Renaming a space and archiving it, both `PATCH …/spaces/:id` (`name`,
+    // or `status` "archived"), as Core does for an active space.
     std::optional<QByteArray> spaceLifecycle(const QByteArray &method, const QStringList &parts, const QJsonObject &json)
     {
-        const bool rename = parts.size() == 7 && method == "PATCH";
-        const bool archive = parts.size() == 8 && method == "POST" && parts.at(7) == QLatin1String("archive");
-        if ((!rename && !archive) || parts.at(3) != QLatin1String("organizations") || parts.at(5) != QLatin1String("spaces"))
+        const bool patch = parts.size() == 7 && method == "PATCH";
+        const bool archive = patch && json.value(QStringLiteral("status")).toString() == QLatin1String("archived");
+        const bool rename = patch && !archive;
+        if (!patch || parts.at(3) != QLatin1String("organizations") || parts.at(5) != QLatin1String("spaces"))
             return std::nullopt;
         const QString orgId = parts.at(4), spaceId = parts.at(6);
         const QJsonObject space = byId(m_spaces.value(orgId), spaceId);
@@ -1669,29 +1641,29 @@ private:
     // Puts a document under control, as Core checks it: the document, the
     // add-on's document_manage action on its space, its revision, the add-on
     // active in the space, then a published Markdown version.
-    QByteArray enableControl(const QString &orgId, const QString &spaceId, const QString &documentId)
+    QByteArray enableControl(const QString &orgId, const QString &spaceId, const QString &documentId, const QJsonObject &json)
     {
-        const QJsonObject doc = byId(m_documents.value(spaceId), documentId);
+        const QJsonObject doc = byId(m_items.value(spaceId), documentId);
         if (doc.isEmpty())
             return errorReply(404, QStringLiteral("not_found"));
         if (!holds(orgId, spaceId, QStringLiteral("addon.controlled_docs.document_manage")))
             return errorReply(403, QStringLiteral("forbidden"));
-        if (const std::optional<QByteArray> refused = refuseRevision(doc))
+        if (const std::optional<QByteArray> refused = refuseItemRevision(doc, json))
             return *refused;
         if (!addOnActive(orgId, spaceId, QStringLiteral("controlled_docs")))
             return errorReply(409, QStringLiteral("controlled_docs_unavailable"));
-        const QJsonObject version = doc.value(QStringLiteral("current_version")).toObject();
+        const QJsonObject version = facetOf(doc).value(QStringLiteral("current_version")).toObject();
         if (version.isEmpty())
             return errorReply(422, QStringLiteral("published_version_required"));
         if (version.value(QStringLiteral("content_type")) != QLatin1String("text/markdown")
             || !version.value(QStringLiteral("filename")).toString().endsWith(QLatin1String(".md"), Qt::CaseInsensitive))
             return errorReply(422, QStringLiteral("unsupported_media_type"));
-        update(m_documents[spaceId], documentId, [](QJsonObject &controlled) {
-            controlled.insert(QStringLiteral("controlled_docs_enabled"), true);
+        update(m_items[spaceId], documentId, [](QJsonObject &controlled) {
+            setFacet(controlled, QStringLiteral("controlled_docs_enabled"), true);
             controlled.insert(QStringLiteral("revision"), controlled.value(QStringLiteral("revision")).toInt() + 1);
         });
-        const QJsonObject enabled = byId(m_documents.value(spaceId), documentId);
-        return jsonReply(200, {{QStringLiteral("data"), QJsonObject{{QStringLiteral("document_id"), enabled.value(QStringLiteral("id"))},
+        const QJsonObject enabled = byId(m_items.value(spaceId), documentId);
+        return jsonReply(200, {{QStringLiteral("data"), QJsonObject{{QStringLiteral("item_id"), enabled.value(QStringLiteral("id"))},
                                                                     {QStringLiteral("enabled"), true},
                                                                     {QStringLiteral("revision"), enabled.value(QStringLiteral("revision"))}}},
                                {QStringLiteral("request_id"), requestId()}});
@@ -1786,16 +1758,21 @@ private:
     }
 
     // The resource of a grant, as Core stores it: `resource_kind` "space",
-    // "folder", "item" (a document), or "tag", and the ids naming it. A
-    // document's id is a number, as Core's.
+    // "item" (a folder or a document), or "tag", and the ids naming it.
     static QJsonObject grantResource(const QString &kind, const QString &spaceId, const QString &id)
     {
         const QJsonValue none(QJsonValue::Null);
         return {{QStringLiteral("resource_kind"), kind},
                 {QStringLiteral("space_id"), kind == QLatin1String("tag") ? none : QJsonValue(spaceId)},
-                {QStringLiteral("folder_id"), kind == QLatin1String("folder") ? QJsonValue(id) : none},
-                {QStringLiteral("item_id"), kind == QLatin1String("item") ? QJsonValue(id.toLongLong()) : none},
+                {QStringLiteral("item_id"), kind == QLatin1String("item") ? QJsonValue(id) : none},
                 {QStringLiteral("tag_id"), kind == QLatin1String("tag") ? QJsonValue(id) : none}};
+    }
+
+    // The resource of a grant on item `itemId`, in the space that holds it;
+    // its space is empty when there is no such item.
+    QJsonObject itemGrantResource(const QString &orgId, const QString &itemId) const
+    {
+        return grantResource(QStringLiteral("item"), spaceOf(orgId, itemId), itemId);
     }
 
     static bool sameResource(const QJsonObject &grant, const QJsonObject &resource)
@@ -1815,8 +1792,8 @@ private:
         return kind + QLatin1Char(':') + jsonId(grant.value(field));
     }
 
-    // Space, folder, and document grants of an archived role are not
-    // listed; tag grants do not depend on the role's status.
+    // Space and item grants of an archived role are not listed; tag grants
+    // do not depend on the role's status.
     bool listedGrant(const QString &orgId, const QJsonObject &grant)
     {
         return grant.value(QStringLiteral("resource_kind")) == QLatin1String("tag")
@@ -1831,7 +1808,7 @@ private:
         return rows;
     }
 
-    // Whether the space, folder, document, or tag `resource` exists in `orgId`.
+    // Whether the space, item, or tag `resource` exists in `orgId`.
     bool resourceExists(const QString &orgId, const QJsonObject &resource) const
     {
         const QString kind = resource.value(QStringLiteral("resource_kind")).toString();
@@ -1840,10 +1817,8 @@ private:
             return !byId(m_tags.value(orgId), resource.value(QStringLiteral("tag_id")).toString()).isEmpty();
         if (byId(m_spaces.value(orgId), spaceId).isEmpty())
             return false;
-        if (kind == QLatin1String("folder"))
-            return !byId(m_folders.value(spaceId), resource.value(QStringLiteral("folder_id")).toString()).isEmpty();
         if (kind == QLatin1String("item"))
-            return !byId(m_documents.value(spaceId), jsonId(resource.value(QStringLiteral("item_id")))).isEmpty();
+            return !byId(m_items.value(spaceId), jsonId(resource.value(QStringLiteral("item_id")))).isEmpty();
         return true;
     }
 
@@ -1911,35 +1886,32 @@ private:
         return jsonReply(200, {{QStringLiteral("grants"), mine}, {QStringLiteral("request_id"), requestId()}});
     }
 
-    // `GET …/access` on a space, folder, or document: the grants on its
-    // space, the folders above it outermost first, and itself, each with its
-    // `source`, whether it is `inherited`, and its `scope`, paged in that
-    // order. Below the deepest folder or document that stops inheriting, a
-    // grant above it is listed only when its role manages access. Each page
-    // carries the `summary`.
+    // `GET …/access` on a space or item: the grants on its space, the items
+    // above it outermost first, and itself, each with its `source`, whether
+    // it is `inherited`, and its `scope`, paged in that order. Below the
+    // deepest item that stops inheriting, a grant above it is listed only when
+    // its role manages access. Each page carries the `summary`.
     QByteArray accessOf(const QString &orgId, const QJsonObject &resource)
     {
         if (!resourceExists(orgId, resource))
             return errorReply(404, QStringLiteral("not_found"));
         const QString kind = resource.value(QStringLiteral("resource_kind")).toString();
         const QString spaceId = resource.value(QStringLiteral("space_id")).toString();
-        QString folderId = kind == QLatin1String("folder") ? resource.value(QStringLiteral("folder_id")).toString()
-                         : kind == QLatin1String("item")
-                         ? byId(m_documents.value(spaceId), jsonId(resource.value(QStringLiteral("item_id")))).value(QStringLiteral("folder_id")).toString()
+        QString parentId = kind == QLatin1String("item")
+                         ? byId(m_items.value(spaceId), jsonId(resource.value(QStringLiteral("item_id")))).value(QStringLiteral("parent_id")).toString()
                          : QString();
         QList<QJsonObject> sources;
-        for (; !folderId.isEmpty();
-             folderId = byId(m_folders.value(spaceId), folderId).value(QStringLiteral("parent_id")).toString())
-            sources.prepend(grantResource(QStringLiteral("folder"), spaceId, folderId));
+        for (; !parentId.isEmpty();
+             parentId = byId(m_items.value(spaceId), parentId).value(QStringLiteral("parent_id")).toString())
+            sources.prepend(grantResource(QStringLiteral("item"), spaceId, parentId));
         sources.prepend(grantResource(QStringLiteral("space"), spaceId, {}));
         if (kind == QLatin1String("item"))
             sources.append(resource);
         const auto named = [](const QJsonObject &source) {
             const QString sourceKind = source.value(QStringLiteral("resource_kind")).toString();
-            return QJsonObject{{QStringLiteral("kind"), sourceKind == QLatin1String("item") ? QStringLiteral("document") : sourceKind},
+            return QJsonObject{{QStringLiteral("kind"), sourceKind},
                                {QStringLiteral("id"), sourceKind == QLatin1String("space") ? source.value(QStringLiteral("space_id"))
-                                                    : sourceKind == QLatin1String("folder") ? source.value(QStringLiteral("folder_id"))
-                                                                                            : source.value(QStringLiteral("item_id"))}};
+                                                                                           : source.value(QStringLiteral("item_id"))}};
         };
         int breakAt = -1;
         for (int at = 0; at < sources.size(); ++at)
@@ -1982,35 +1954,13 @@ private:
         return listed(QStringLiteral("access"), rows, true, {{QStringLiteral("summary"), summary}});
     }
 
-    // The `inheritance` a folder or document `source` keeps in `spaceId`,
-    // empty while it inherits; a space always inherits.
+    // The `inheritance` an item `source` keeps in `spaceId`, empty while it
+    // inherits; a space always inherits.
     QString inheritanceOf(const QString &spaceId, const QJsonObject &source) const
     {
-        const QString kind = source.value(QStringLiteral("resource_kind")).toString();
-        if (kind == QLatin1String("folder"))
-            return byId(m_folders.value(spaceId), source.value(QStringLiteral("folder_id")).toString()).value(QStringLiteral("inheritance")).toString();
-        if (kind == QLatin1String("item"))
-            return byId(m_documents.value(spaceId), jsonId(source.value(QStringLiteral("item_id")))).value(QStringLiteral("inheritance")).toString();
-        return {};
-    }
-
-    // `PUT …/folders/:id/access` or `…/documents/:id/access`: keeps
-    // `inheritance` ("inherit" clears it) and answers the folder or document.
-    QByteArray setInheritance(const QString &orgId, const QJsonObject &resource, const QJsonObject &json)
-    {
-        if (!resourceExists(orgId, resource))
-            return errorReply(404, QStringLiteral("not_found"));
-        const QString value = json.value(QStringLiteral("inheritance")).toString();
-        if (value != QLatin1String("inherit") && value != QLatin1String("open") && value != QLatin1String("restricted"))
-            return errorReply(422, QStringLiteral("invalid_inheritance"));
-        const QString spaceId = resource.value(QStringLiteral("space_id")).toString();
-        const bool folder = resource.value(QStringLiteral("resource_kind")) == QLatin1String("folder");
-        QJsonArray &list = folder ? m_folders[spaceId] : m_documents[spaceId];
-        const QString id = folder ? resource.value(QStringLiteral("folder_id")).toString() : jsonId(resource.value(QStringLiteral("item_id")));
-        update(list, id, [&](QJsonObject &row) {
-            row.insert(QStringLiteral("inheritance"), value == QLatin1String("inherit") ? QJsonValue(QJsonValue::Null) : QJsonValue(value));
-        });
-        return jsonReply(200, {{folder ? QStringLiteral("folder") : QStringLiteral("document"), byId(list, id)}});
+        if (source.value(QStringLiteral("resource_kind")) != QLatin1String("item"))
+            return {};
+        return byId(m_items.value(spaceId), jsonId(source.value(QStringLiteral("item_id")))).value(QStringLiteral("inheritance")).toString();
     }
 
     // `GET members/:id/access` and `GET groups/:id/access`: the grants that
@@ -2045,12 +1995,11 @@ private:
             if (!reaches || !listedGrant(orgId, row))
                 continue;
             const QString resourceId = resourceKind == QLatin1String("space") ? row.value(QStringLiteral("space_id")).toString()
-                                     : resourceKind == QLatin1String("folder") ? row.value(QStringLiteral("folder_id")).toString()
                                      : resourceKind == QLatin1String("tag") ? row.value(QStringLiteral("tag_id")).toString()
                                                                              : jsonId(row.value(QStringLiteral("item_id")));
             row.insert(QStringLiteral("resource"), QJsonObject{
-                    {QStringLiteral("kind"), resourceKind == QLatin1String("item") ? QStringLiteral("document") : resourceKind},
-                    {QStringLiteral("id"), resourceKind == QLatin1String("item") ? row.value(QStringLiteral("item_id")) : QJsonValue(resourceId)},
+                    {QStringLiteral("kind"), resourceKind},
+                    {QStringLiteral("id"), resourceId},
                     {QStringLiteral("space_id"), row.value(QStringLiteral("space_id"))}});
             row.insert(QStringLiteral("via"), QJsonObject{{QStringLiteral("kind"), principalKind}, {QStringLiteral("id"), principalId}});
             rows.append(row);
@@ -2138,9 +2087,8 @@ private:
             row.insert(QStringLiteral("principal"), QJsonObject{{QStringLiteral("kind"), principal.section(QLatin1Char(':'), 0, 0)},
                                                                 {QStringLiteral("id"), principal.section(QLatin1Char(':'), 1)}});
             row.insert(QStringLiteral("resource"), QJsonObject{
-                    {QStringLiteral("kind"), resourceKind == QLatin1String("item") ? QStringLiteral("document") : resourceKind},
+                    {QStringLiteral("kind"), resourceKind},
                     {QStringLiteral("id"), resourceKind == QLatin1String("space") ? row.value(QStringLiteral("space_id"))
-                                         : resourceKind == QLatin1String("folder") ? row.value(QStringLiteral("folder_id"))
                                          : resourceKind == QLatin1String("tag") ? row.value(QStringLiteral("tag_id"))
                                                                                  : row.value(QStringLiteral("item_id"))},
                     {QStringLiteral("space_id"), row.value(QStringLiteral("space_id"))}});
@@ -2241,16 +2189,47 @@ private:
         return operating.value(QStringLiteral("actions")).toArray().contains(action);
     }
 
+    // The actions of a space: those of the atomic space roles, and the
+    // add-on ones a space holds.
+    static QStringList spaceActionKeys()
+    {
+        QStringList atomic;
+        for (const auto &[role, held] : atomicRoles()) atomic.append(role);
+        return actionsOf(atomic) + QStringList{
+                QStringLiteral("addon.controlled_docs.approve"), QStringLiteral("addon.controlled_docs.document_manage"),
+                QStringLiteral("addon.controlled_docs.review_read")};
+    }
+
+    // A role as Core lists it: `assignable` names the scopes its role reaches,
+    // "organization" for one given across the organization, "resource" for
+    // one a grant on a place carries. A built-in role is one or the other by
+    // its key; any other by the actions it holds.
+    static QJsonObject roleJson(QJsonObject role)
+    {
+        bool organization = false, resource = false;
+        if (role.value(QStringLiteral("origin")) == QLatin1String("system")) {
+            organization = organizationActions().contains(role.value(QStringLiteral("key")).toString());
+            resource = !organization;
+        } else {
+            const QStringList spaceKeys = spaceActionKeys();
+            for (const QJsonValue &action : role.value(QStringLiteral("actions")).toArray()) {
+                if (spaceKeys.contains(action.toString())) resource = true;
+                else organization = true;
+            }
+        }
+        QJsonArray assignable;
+        if (organization) assignable.append(QStringLiteral("organization"));
+        if (resource) assignable.append(QStringLiteral("resource"));
+        role.insert(QStringLiteral("assignable"), assignable);
+        return role;
+    }
+
     // `GET action-catalog`: the actions Core lists, each `allowed` as the
     // signed-in user may use it across the organization or, with `spaceId`,
     // in that space, where an add-on's action also needs the add-on active.
     QByteArray actionCatalog(const QString &orgId, const QString &spaceId)
     {
-        QStringList atomic;
-        for (const auto &[role, held] : atomicRoles()) atomic.append(role);
-        const QStringList spaceKeys = actionsOf(atomic) + QStringList{
-                QStringLiteral("addon.controlled_docs.approve"), QStringLiteral("addon.controlled_docs.document_manage"),
-                QStringLiteral("addon.controlled_docs.review_read")};
+        const QStringList spaceKeys = spaceActionKeys();
         QStringList organizationKeys{QStringLiteral("organization.transfer_ownership")};
         for (const QStringList &actions : organizationActions())
             for (const QString &action : actions)
@@ -2285,8 +2264,8 @@ private:
         return jsonReply(200, {{QStringLiteral("catalog_version"), 1}, {QStringLiteral("actions"), actions}});
     }
 
-    // Roles, groups, principal roles, tags, the grants on spaces, folders,
-    // documents, and tags, and the access reaching a resource, member, or
+    // Roles, groups, principal roles, tags, the grants on spaces, items, and
+    // tags, and the access reaching a resource, member, or
     // group, for an owner or admin.
     std::optional<QByteArray> organizationAccess(const QByteArray &method, const QStringList &parts,
                                                 const QJsonObject &json)
@@ -2298,7 +2277,7 @@ private:
         QJsonObject resource;
         QString leaf;
         const auto grantLeaf = [](const QString &part) { return part == QLatin1String("grants") || part == QLatin1String("access"); };
-        // One grant of a space, folder, document, or tag: `…/grants/:id`.
+        // One grant of a space, item, or tag: `…/grants/:id`.
         const QString grantId = parts.last() != QLatin1String("grants") && parts.size() >= 9 && parts.at(parts.size() - 2) == QLatin1String("grants")
                               ? parts.last() : QString();
         if (!grantId.isEmpty() && method == "DELETE") {
@@ -2308,19 +2287,16 @@ private:
                 return revokeGrant(grantResource(QStringLiteral("tag"), {}, parts.at(6)), grantId);
             if (kind == QLatin1String("spaces") && parts.size() == 9)
                 return revokeGrant(grantResource(QStringLiteral("space"), parts.at(6), {}), grantId);
-            if (kind == QLatin1String("spaces") && parts.size() == 11)
-                return revokeGrant(grantResource(parts.at(7) == QLatin1String("folders") ? QStringLiteral("folder") : QStringLiteral("item"),
-                                                 parts.at(6), parts.at(8)), grantId);
+            if (kind == QLatin1String("items") && parts.size() == 9)
+                return revokeGrant(itemGrantResource(orgId, parts.at(6)), grantId);
             return std::nullopt;
         }
         if (kind == QLatin1String("spaces") && parts.size() == 8 && grantLeaf(parts.at(7))) {
             resource = grantResource(QStringLiteral("space"), parts.at(6), {});
             leaf = parts.at(7);
-        } else if (kind == QLatin1String("spaces") && parts.size() == 10 && grantLeaf(parts.at(9))
-                   && (parts.at(7) == QLatin1String("folders") || parts.at(7) == QLatin1String("documents"))) {
-            resource = grantResource(parts.at(7) == QLatin1String("folders") ? QStringLiteral("folder") : QStringLiteral("item"),
-                                     parts.at(6), parts.at(8));
-            leaf = parts.at(9);
+        } else if (kind == QLatin1String("items") && parts.size() == 8 && grantLeaf(parts.at(7))) {
+            resource = itemGrantResource(orgId, parts.at(6));
+            leaf = parts.at(7);
         } else if (kind == QLatin1String("tags") && parts.size() == 8 && parts.at(7) == QLatin1String("grants")) {
             resource = grantResource(QStringLiteral("tag"), {}, parts.at(6));
             leaf = parts.at(7);
@@ -2353,8 +2329,6 @@ private:
                 return replaceGrants(orgId, resource, json);
             if (method == "POST" && leaf == QLatin1String("grants"))
                 return createGrant(orgId, resource, json);
-            if (method == "PUT" && resource.value(QStringLiteral("resource_kind")) != QLatin1String("space"))
-                return setInheritance(orgId, resource, json);
             return std::nullopt;
         }
         if (reach && method == "GET")
@@ -2441,8 +2415,12 @@ private:
             members.append(member);
             return jsonReply(201, {{QStringLiteral("member"), member}});
         }
-        if (method == "GET" && id.isEmpty())
-            return listed(kind, rows);
+        if (method == "GET" && id.isEmpty()) {
+            QJsonArray listedRows;
+            for (const QJsonValue &row : std::as_const(rows))
+                listedRows.append(kind == QLatin1String("roles") ? roleJson(row.toObject()) : row);
+            return listed(kind, listedRows);
+        }
         if (method == "POST" && id.isEmpty()) {
             for (const QJsonValue &row : std::as_const(rows))
                 if (row.toObject().value(QStringLiteral("name")).toString().compare(name, Qt::CaseInsensitive) == 0)
@@ -2468,7 +2446,8 @@ private:
             return errorReply(409, QStringLiteral("system_role"));
         if (row.value(QStringLiteral("origin")) == QLatin1String("add_on"))
             return errorReply(409, QStringLiteral("add_on_role"));
-        if (method == "POST" && action == QLatin1String("archive")) {
+        // Core lists only active rows, so an archived one leaves the listing.
+        if (method == "PATCH" && json.value(QStringLiteral("status")).toString() == QLatin1String("archived")) {
             drop(rows, id);
             return jsonReply(200, {{single, row}});
         }
@@ -2482,35 +2461,70 @@ private:
         return std::nullopt;
     }
 
+    // An active folder or document `kind` named `name` under `parentId` (the
+    // space root when empty), at revision 1 and not in any trash group.
+    static QJsonObject newItem(const QString &spaceId, const QString &kind, const QString &parentId, const QString &name)
+    {
+        return {{QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces)},
+                {QStringLiteral("kind"), kind},
+                {QStringLiteral("space_id"), spaceId},
+                {QStringLiteral("parent_id"), nullable(parentId)},
+                {QStringLiteral("name"), name},
+                {QStringLiteral("revision"), 1},
+                {QStringLiteral("state"), QStringLiteral("active")},
+                {QStringLiteral("trash_group_id"), QJsonValue(QJsonValue::Null)}};
+    }
+
     QJsonObject addFolder(const QString &spaceId, const QString &parentId, const QString &name)
     {
-        QJsonObject folder;
-        folder.insert(QStringLiteral("id"), QStringLiteral("folder-%1").arg(++m_nextFolder));
-        folder.insert(QStringLiteral("space_id"), spaceId);
-        folder.insert(QStringLiteral("parent_id"), nullable(parentId));
-        folder.insert(QStringLiteral("name"), name);
-        folder.insert(QStringLiteral("revision"), 1);
-        m_folders[spaceId].append(folder);
+        const QJsonObject folder = newItem(spaceId, QStringLiteral("folder"), parentId, name);
+        m_items[spaceId].append(folder);
         return folder;
     }
 
-    QJsonObject addDocument(const QString &spaceId, const QString &title, const QString &folderId,
+    // A document named `name` under `parentId`, with `content` published as
+    // its first version when given.
+    QJsonObject addDocument(const QString &spaceId, const QString &name, const QString &parentId,
                             const std::optional<QByteArray> &content = std::nullopt)
     {
-        QJsonObject doc;
-        doc.insert(QStringLiteral("id"), QString::number(++m_nextDocument));
-        doc.insert(QStringLiteral("space_id"), spaceId);
-        doc.insert(QStringLiteral("folder_id"), nullable(folderId));
-        doc.insert(QStringLiteral("title"), title);
-        doc.insert(QStringLiteral("revision"), 1);
-        doc.insert(QStringLiteral("current_version"),
-                   content ? QJsonValue(readyVersion(newVersionId(), 1, title, QStringLiteral("text/plain"), *content))
-                           : QJsonValue(QJsonValue::Null));
-        doc.insert(QStringLiteral("pending_version_id"), QJsonValue(QJsonValue::Null));
-        if (content)
-            m_blobs.insert(doc.value(QStringLiteral("id")).toString(), *content);
-        m_documents[spaceId].append(doc);
+        QJsonObject doc = newItem(spaceId, QStringLiteral("document"), parentId, name);
+        doc.insert(QStringLiteral("document"),
+                   QJsonObject{{QStringLiteral("metadata"), QJsonObject()},
+                               {QStringLiteral("tag_assignments"), QJsonArray()},
+                               {QStringLiteral("current_version_id"), QJsonValue(QJsonValue::Null)},
+                               {QStringLiteral("current_version"), QJsonValue(QJsonValue::Null)},
+                               {QStringLiteral("pending_version_id"), QJsonValue(QJsonValue::Null)},
+                               {QStringLiteral("controlled_docs_enabled"), false}});
+        const QString id = doc.value(QStringLiteral("id")).toString();
+        if (content) {
+            const QJsonObject version = readyVersion(newVersionId(), 1, name, QStringLiteral("text/plain"), *content);
+            setCurrentVersion(doc, version);
+            m_blobs.insert(id, *content);
+            m_blobs.insert(version.value(QStringLiteral("id")).toString(), *content);
+            m_history[id].append(version);
+        }
+        m_items[spaceId].append(doc);
         return doc;
+    }
+
+    // The document facet of an item row, as Core nests it under `document`.
+    static QJsonObject facetOf(const QJsonObject &item)
+    {
+        return item.value(QStringLiteral("document")).toObject();
+    }
+
+    static void setFacet(QJsonObject &item, const QString &field, const QJsonValue &value)
+    {
+        QJsonObject facet = facetOf(item);
+        facet.insert(field, value);
+        item.insert(QStringLiteral("document"), facet);
+    }
+
+    // Makes `version` the current version of the document `item`.
+    static void setCurrentVersion(QJsonObject &item, const QJsonObject &version)
+    {
+        setFacet(item, QStringLiteral("current_version"), version);
+        setFacet(item, QStringLiteral("current_version_id"), version.value(QStringLiteral("id")));
     }
 
     QJsonObject addSpace(const QString &orgId, const QString &name, const QString &visibility)
@@ -2576,65 +2590,534 @@ private:
         return item;
     }
 
-    // Renames the folder or document `id` of `spaceId` to the request's name
-    // (a folder's `name`, a document's `title`) within its own parent.
-    QByteArray rename(const QString &kind, QHash<QString, QJsonArray> &bySpace, const QString &spaceId,
-                      const QString &id, const QJsonObject &json)
+    // Lets `change` edit each item `ids` of space `spaceId`, one revision
+    // later, then moves those items to space `targetSpace` when it differs.
+    template<typename Change>
+    void rewrite(const QString &spaceId, const QString &targetSpace, const QStringList &ids, Change change)
     {
-        const bool folder = kind == QLatin1String("folder");
-        const QString field = folder ? QStringLiteral("name") : QStringLiteral("title");
-        const QJsonObject item = byId(bySpace.value(spaceId), id);
-        if (item.isEmpty())
+        QJsonArray &source = m_items[spaceId];
+        for (const QString &id : ids) {
+            update(source, id, [&](QJsonObject &row) {
+                row.insert(QStringLiteral("space_id"), targetSpace);
+                change(id, row);
+            });
+        }
+        if (targetSpace == spaceId)
+            return;
+        QJsonArray moved;
+        for (const QString &id : ids) {
+            moved.append(byId(source, id));
+            drop(source, id);
+        }
+        QJsonArray &target = m_items[targetSpace];
+        for (const QJsonValue &row : std::as_const(moved))
+            target.append(row);
+    }
+
+    // The routes of /organizations/:org_id/items: the folders and documents
+    // of an organization as one collection, one item, and the sub-resources
+    // of an item that this fake serves.
+    std::optional<QByteArray> itemRoutes(const QByteArray &method, const QStringList &parts, const QJsonObject &json)
+    {
+        if (parts.size() < 6 || parts.at(1) != QLatin1String("api") || parts.at(2) != QLatin1String("v1")
+            || parts.at(3) != QLatin1String("organizations") || parts.at(5) != QLatin1String("items"))
+            return std::nullopt;
+        const QString orgId = parts.at(4);
+        if (parts.size() == 6) {
+            if (method == "GET")
+                return listItems(orgId);
+            if (method == "POST")
+                return createItem(orgId, json);
+            return std::nullopt;
+        }
+        if (parts.size() == 7 && parts.at(6) == QLatin1String("download-urls") && method == "POST")
+            return downloadUrls(orgId, json);
+        const QString itemId = parts.at(6);
+        const QString leaf = parts.size() >= 8 ? parts.at(7) : QString();
+        const QString spaceId = spaceOf(orgId, itemId);
+        if (spaceId.isEmpty())
             return errorReply(404, QStringLiteral("not_found"));
-        if (const std::optional<QByteArray> refused = refuseRevision(item))
-            return *refused;
-        const QString parentId = item.value(folder ? QStringLiteral("parent_id") : QStringLiteral("folder_id")).toString();
-        const QString name = storedName(json.value(field));
-        if (const std::optional<QByteArray> refused = refuseName(spaceId, parentId, name, id))
-            return *refused;
-        update(bySpace[spaceId], id, [&](QJsonObject &renamed) { renamed.insert(field, name); });
-        return single(kind, bySpace.value(spaceId), id);
+        const QJsonObject item = byId(m_items.value(spaceId), itemId);
+        if (leaf.isEmpty()) {
+            if (method == "GET")
+                return single(QStringLiteral("item"), m_items.value(spaceId), itemId);
+            if (method == "PATCH")
+                return patchItem(orgId, item, json);
+            if (method == "DELETE")
+                return purgeItem(item, json);
+            return std::nullopt;
+        }
+        if (leaf == QLatin1String("versions") && method == "GET") {
+            // Every version published, the current one marked.
+            const QString current = facetOf(item).value(QStringLiteral("current_version_id")).toString();
+            QJsonArray versions;
+            for (const QJsonValue &value : m_history.value(itemId)) {
+                QJsonObject version = value.toObject();
+                version.insert(QStringLiteral("current"), version.value(QStringLiteral("id")).toString() == current);
+                version.insert(QStringLiteral("publication_state"), QStringLiteral("published"));
+                versions.append(version);
+            }
+            return listed(QStringLiteral("versions"), versions);
+        }
+        if (leaf == QLatin1String("download") && method == "GET") {
+            const QJsonObject data = signedUrl(itemId, query().queryItemValue(QStringLiteral("version_id")));
+            return jsonReply(200, QJsonObject{{QStringLiteral("data"), data}});
+        }
+        if (leaf == QLatin1String("references") && method == "GET") {
+            const QJsonObject none{{QStringLiteral("incoming"), QJsonObject{{QStringLiteral("references"), QJsonArray()},
+                                                                            {QStringLiteral("hidden_count"), 0}}},
+                                   {QStringLiteral("outgoing"), QJsonObject{{QStringLiteral("references"), QJsonArray()}}}};
+            return jsonReply(200, QJsonObject{{QStringLiteral("data"), m_references.value(itemId, none)}});
+        }
+        if (leaf == QLatin1String("reviews") && method == "GET")
+            return listed(QStringLiteral("reviews"), m_reviews.value(itemId));
+        if (leaf == QLatin1String("controlled-docs") && method == "PUT")
+            return enableControl(orgId, spaceId, itemId, json);
+        return std::nullopt;
     }
 
-    // A folder `name` or document `title` as Core stores it: NFC-normalized
-    // and trimmed.
-    static QString storedName(const QJsonValue &name)
+    // GET items: the folders and documents of the organization that the query
+    // selects, in the order they were made.
+    QByteArray listItems(const QString &orgId) const
     {
-        return name.toString().normalized(QString::NormalizationForm_C).trimmed();
+        const QUrlQuery params = query();
+        for (const auto &pair : params.queryItems(QUrl::FullyDecoded)) {
+            if (!declaredItemParameter(pair.first))
+                return errorReply(400, QStringLiteral("unknown_parameter"), {{QStringLiteral("parameter"), pair.first}});
+        }
+        const QString state = params.hasQueryItem(QStringLiteral("state")) ? params.queryItemValue(QStringLiteral("state"))
+                                                                           : QStringLiteral("active");
+        const QString kind = params.queryItemValue(QStringLiteral("kind"));
+        const QString spaceFilter = params.queryItemValue(QStringLiteral("space_id"));
+        const bool filterParent = params.hasQueryItem(QStringLiteral("parent_id"));
+        const QString parentFilter = params.queryItemValue(QStringLiteral("parent_id"));
+        const QString words = params.queryItemValue(QStringLiteral("q"));
+        const QStringList tagIds = params.queryItemValue(QStringLiteral("tag_ids")).split(QLatin1Char(','), Qt::SkipEmptyParts);
+        const QString checksum = params.queryItemValue(QStringLiteral("checksum_sha256"));
+        // `metadata[key]=value` keeps the documents whose metadata holds that value under `key`.
+        QList<QPair<QString, QString>> metadata;
+        for (const auto &pair : params.queryItems(QUrl::FullyDecoded)) {
+            if (pair.first.startsWith(QLatin1String("metadata[")) && pair.first.endsWith(QLatin1Char(']')))
+                metadata.append({pair.first.mid(9, pair.first.size() - 10), pair.second});
+        }
+        const auto selected = [&](const QJsonObject &item) {
+            const QJsonObject facet = facetOf(item);
+            const QJsonArray assignments = facet.value(QStringLiteral("tag_assignments")).toArray();
+            if (item.value(QStringLiteral("state")).toString() != state)
+                return false;
+            if (!kind.isEmpty() && item.value(QStringLiteral("kind")).toString() != kind)
+                return false;
+            if (filterParent && (parentFilter == QLatin1String("null")
+                                     ? !jsonId(item.value(QStringLiteral("parent_id"))).isEmpty()
+                                     : jsonId(item.value(QStringLiteral("parent_id"))) != parentFilter))
+                return false;
+            if (!words.isEmpty() && !item.value(QStringLiteral("name")).toString().contains(words, Qt::CaseInsensitive))
+                return false;
+            // Core keeps the items that carry every tag asked for.
+            for (const QString &tagId : tagIds) {
+                if (std::none_of(assignments.begin(), assignments.end(), [&](const QJsonValue &assignment) {
+                        return assignment.toObject().value(QStringLiteral("tag_id")).toString() == tagId;
+                    }))
+                    return false;
+            }
+            const QString itemId = jsonId(item.value(QStringLiteral("id")));
+            if (!checksum.isEmpty() && (!m_blobs.contains(itemId) || sha256(m_blobs.value(itemId)) != checksum))
+                return false;
+            const QJsonObject stored = facet.value(QStringLiteral("metadata")).toObject();
+            for (const auto &[key, value] : std::as_const(metadata)) {
+                if (stored.value(key).toString() != value)
+                    return false;
+            }
+            return true;
+        };
+        QJsonArray items;
+        for (const QJsonValue &space : m_spaces.value(orgId)) {
+            const QString spaceId = jsonId(space.toObject().value(QStringLiteral("id")));
+            if (!spaceFilter.isEmpty() && spaceId != spaceFilter)
+                continue;
+            for (const QJsonValue &value : m_items.value(spaceId)) {
+                if (selected(value.toObject()))
+                    items.append(value);
+            }
+        }
+        return listed(QStringLiteral("items"), items, true);
     }
 
-    // The form under which two names collide: stored, then lowercased.
-    static QString nameKey(const QString &name)
+    // The query parameters Core declares for GET items.
+    static bool declaredItemParameter(const QString &name)
     {
-        return storedName(name).toLower();
+        static const QStringList declared{QStringLiteral("space_id"), QStringLiteral("parent_id"), QStringLiteral("kind"),
+                                          QStringLiteral("state"), QStringLiteral("q"), QStringLiteral("tag_ids"),
+                                          QStringLiteral("metadata"), QStringLiteral("checksum_sha256"),
+                                          QStringLiteral("cursor"), QStringLiteral("limit")};
+        return declared.contains(name) || name.startsWith(QLatin1String("metadata["));
     }
 
-    // Core's naming rule for a folder or document named `name` (stored form)
-    // in the parent `parentId` (the root when empty) of `spaceId`: 422
-    // invalid_name when it is empty, "." or "..", or holds "/", "\" or a
-    // control character; 409 name_conflict when a folder or live document
-    // there other than `selfId` has the same key. Nothing when it fits.
-    std::optional<QByteArray> refuseName(const QString &spaceId, const QString &parentId, const QString &name,
-                                         const QString &selfId = {}) const
+    // POST items: a folder or document of the organization's space, under
+    // the parent folder named or at the root.
+    QByteArray createItem(const QString &orgId, const QJsonObject &json)
+    {
+        const QString kind = json.value(QStringLiteral("kind")).toString();
+        if (kind != QLatin1String("folder") && kind != QLatin1String("document"))
+            return errorReply(422, QStringLiteral("invalid_request"));
+        const QString spaceId = json.value(QStringLiteral("space_id")).toString();
+        if (byId(m_spaces.value(orgId), spaceId).isEmpty())
+            return errorReply(404, QStringLiteral("not_found"));
+        const QString parentId = json.value(QStringLiteral("parent_id")).toString();
+        if (const std::optional<QByteArray> refused = refuseParent(spaceId, parentId))
+            return *refused;
+        const QString name = json.value(QStringLiteral("name")).toString();
+        if (const std::optional<QByteArray> refused = refuseName(spaceId, parentId, kind, name))
+            return *refused;
+        return made(QStringLiteral("item"), kind == QLatin1String("folder") ? addFolder(spaceId, parentId, name)
+                                                                            : addDocument(spaceId, name, parentId));
+    }
+
+    // Refuses a `destination` as Core does: exactly space_id and parent_id, a
+    // space of the organization, and a folder there or the root (null). A
+    // folder cannot move into itself or below itself.
+    std::optional<QByteArray> refuseDestination(const QString &orgId, const QJsonObject &item, const QJsonObject &destination) const
+    {
+        const QString spaceId = item.value(QStringLiteral("space_id")).toString();
+        const QString targetSpace = destination.value(QStringLiteral("space_id")).toString();
+        if (targetSpace.isEmpty() || destination.size() != 2 || !destination.contains(QStringLiteral("parent_id")))
+            return errorReply(422, QStringLiteral("invalid_destination"));
+        if (byId(m_spaces.value(orgId), targetSpace).isEmpty())
+            return errorReply(404, QStringLiteral("not_found"));
+        const QString parentId = destination.value(QStringLiteral("parent_id")).toString();
+        if (const std::optional<QByteArray> refused = refuseParent(targetSpace, parentId))
+            return *refused;
+        if (item.value(QStringLiteral("kind")).toString() == QLatin1String("folder")
+            && movesInside(spaceId, jsonId(item.value(QStringLiteral("id"))), parentId))
+            return errorReply(409, QStringLiteral("folder_cycle"));
+        return std::nullopt;
+    }
+
+    // PATCH item: a trash or restore transition when `state` is given, else
+    // the name, destination, inheritance, metadata, and tags of an active item.
+    std::optional<QByteArray> patchItem(const QString &orgId, const QJsonObject &item, const QJsonObject &json)
+    {
+        if (const std::optional<QByteArray> refused = refuseItemRevision(item, json, QStringLiteral("precondition_required")))
+            return *refused;
+        const QString itemId = jsonId(item.value(QStringLiteral("id")));
+        const QString spaceId = item.value(QStringLiteral("space_id")).toString();
+        const bool trashed = item.value(QStringLiteral("state")).toString() == QLatin1String("trashed");
+        if (json.contains(QStringLiteral("state"))) {
+            const QString state = json.value(QStringLiteral("state")).toString();
+            if (state == QLatin1String("trashed") && !trashed) {
+                trashTree(spaceId, itemId);
+                return single(QStringLiteral("item"), m_items.value(spaceId), itemId);
+            }
+            if (state == QLatin1String("active") && trashed)
+                return restoreGroup(orgId, item, json);
+            return errorReply(409, QStringLiteral("invalid_transition"));
+        }
+        if (trashed)
+            return errorReply(409, QStringLiteral("invalid_transition"));
+
+        const bool folder = item.value(QStringLiteral("kind")).toString() == QLatin1String("folder");
+        if (folder && (json.contains(QStringLiteral("metadata")) || json.contains(QStringLiteral("tag_ids"))))
+            return errorReply(422, QStringLiteral("unknown_field"));
+        QString targetSpace = spaceId;
+        QString parentId = jsonId(item.value(QStringLiteral("parent_id")));
+        if (json.contains(QStringLiteral("destination"))) {
+            const QJsonObject destination = json.value(QStringLiteral("destination")).toObject();
+            if (const std::optional<QByteArray> refused = refuseDestination(orgId, item, destination))
+                return *refused;
+            targetSpace = destination.value(QStringLiteral("space_id")).toString();
+            parentId = destination.value(QStringLiteral("parent_id")).toString();
+        }
+        const QString name = json.contains(QStringLiteral("name")) ? json.value(QStringLiteral("name")).toString()
+                                                                   : item.value(QStringLiteral("name")).toString();
+        if (const std::optional<QByteArray> refused = refuseName(targetSpace, parentId, item.value(QStringLiteral("kind")).toString(), name, itemId))
+            return *refused;
+        const QString inheritance = json.value(QStringLiteral("inheritance")).toString();
+        if (json.contains(QStringLiteral("inheritance"))
+            && inheritance != QLatin1String("inherit") && inheritance != QLatin1String("open")
+            && inheritance != QLatin1String("restricted"))
+            return errorReply(422, QStringLiteral("invalid_inheritance"));
+        QJsonArray tags;
+        for (const QJsonValue &tagId : json.value(QStringLiteral("tag_ids")).toArray()) {
+            const QJsonObject tag = byId(m_tags.value(orgId), tagId.toString());
+            if (tag.isEmpty())
+                return errorReply(422, QStringLiteral("invalid_tag_ids"));
+            tags.append(tagAssignment(tag, tagId.toString()));
+        }
+        // Core moves a folder with everything below it when the space changes.
+        const QStringList moved = targetSpace == spaceId ? QStringList{itemId} : subtreeIds(m_items.value(spaceId), itemId);
+        rewrite(spaceId, targetSpace, moved, [&](const QString &id, QJsonObject &row) {
+            if (id != itemId)
+                return;
+            row.insert(QStringLiteral("parent_id"), nullable(parentId));
+            row.insert(QStringLiteral("name"), name);
+            if (json.contains(QStringLiteral("inheritance")))
+                row.insert(QStringLiteral("inheritance"), inheritance == QLatin1String("inherit") ? QJsonValue(QJsonValue::Null)
+                                                                                                 : QJsonValue(inheritance));
+            if (json.contains(QStringLiteral("metadata")))
+                setFacet(row, QStringLiteral("metadata"), json.value(QStringLiteral("metadata")).toObject());
+            if (json.contains(QStringLiteral("tag_ids")))
+                setFacet(row, QStringLiteral("tag_assignments"), tags);
+        });
+        return single(QStringLiteral("item"), m_items.value(targetSpace), itemId);
+    }
+
+    // The org's tag `tag` (id `tagId`) as an item's `tag_assignments` lists it, put on by hand.
+    static QJsonObject tagAssignment(const QJsonObject &tag, const QString &tagId)
+    {
+        return {{QStringLiteral("name"), tag.value(QStringLiteral("name"))},
+                {QStringLiteral("tag_id"), tagId},
+                {QStringLiteral("source"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("manual")},
+                                                       {QStringLiteral("id"), QJsonValue::Null}}}};
+    }
+
+    // Trashes the item `itemId` and, for a folder, every active item below
+    // it, as one trash group named by `itemId`.
+    void trashTree(const QString &spaceId, const QString &itemId)
+    {
+        QJsonArray &list = m_items[spaceId];
+        for (const QString &id : subtreeIds(list, itemId, QStringLiteral("active"))) {
+            update(list, id, [&](QJsonObject &row) {
+                row.insert(QStringLiteral("state"), QStringLiteral("trashed"));
+                row.insert(QStringLiteral("trash_group_id"), itemId);
+            });
+        }
+    }
+
+    // `rootId` and the items below it in `list`, following only rows in
+    // `state` (any state when empty).
+    static QStringList subtreeIds(const QJsonArray &list, const QString &rootId, const QString &state = {})
+    {
+        QStringList ids;
+        QStringList pending{rootId};
+        while (!pending.isEmpty()) {
+            const QString id = pending.takeLast();
+            ids.append(id);
+            for (const QJsonValue &value : list) {
+                const QJsonObject row = value.toObject();
+                if ((state.isEmpty() || row.value(QStringLiteral("state")).toString() == state)
+                    && jsonId(row.value(QStringLiteral("parent_id"))) == id)
+                    pending.append(jsonId(row.value(QStringLiteral("id"))));
+            }
+        }
+        return ids;
+    }
+
+    // Restores the trash group of the trashed `item` under its own name and
+    // place, or under the `name` and `destination` given. A live sibling
+    // holding the name refuses it.
+    std::optional<QByteArray> restoreGroup(const QString &orgId, const QJsonObject &item, const QJsonObject &json)
+    {
+        const QString spaceId = item.value(QStringLiteral("space_id")).toString();
+        const QString itemId = jsonId(item.value(QStringLiteral("id")));
+        QString targetSpace = spaceId;
+        QString parentId = jsonId(item.value(QStringLiteral("parent_id")));
+        if (json.contains(QStringLiteral("destination"))) {
+            const QJsonObject destination = json.value(QStringLiteral("destination")).toObject();
+            if (const std::optional<QByteArray> refused = refuseDestination(orgId, item, destination))
+                return *refused;
+            targetSpace = destination.value(QStringLiteral("space_id")).toString();
+            parentId = destination.value(QStringLiteral("parent_id")).toString();
+        } else if (const std::optional<QByteArray> refused = refuseParent(spaceId, parentId)) {
+            // Without a destination the item returns to its parent, which must be live.
+            return *refused;
+        }
+        const QString kind = item.value(QStringLiteral("kind")).toString();
+        const QString name = json.contains(QStringLiteral("name")) ? json.value(QStringLiteral("name")).toString()
+                                                                   : item.value(QStringLiteral("name")).toString();
+        if (const std::optional<QByteArray> refused = refuseName(targetSpace, parentId, kind, name, itemId))
+            return *refused;
+        const QString group = item.value(QStringLiteral("trash_group_id")).toString();
+        rewrite(spaceId, targetSpace, groupIds(m_items.value(spaceId), group), [&](const QString &id, QJsonObject &row) {
+            row.insert(QStringLiteral("state"), QStringLiteral("active"));
+            row.insert(QStringLiteral("trash_group_id"), QJsonValue(QJsonValue::Null));
+            if (id == itemId) {
+                row.insert(QStringLiteral("parent_id"), nullable(parentId));
+                row.insert(QStringLiteral("name"), name);
+            }
+        });
+        return single(QStringLiteral("item"), m_items.value(targetSpace), itemId);
+    }
+
+    // DELETE item: removes the trashed item and its trash group for good.
+    std::optional<QByteArray> purgeItem(const QJsonObject &item, const QJsonObject &json)
+    {
+        if (item.value(QStringLiteral("state")).toString() != QLatin1String("trashed"))
+            return errorReply(409, QStringLiteral("invalid_transition"));
+        if (const std::optional<QByteArray> refused = refuseItemRevision(item, json, QStringLiteral("precondition_required")))
+            return *refused;
+        QJsonArray &list = m_items[item.value(QStringLiteral("space_id")).toString()];
+        for (const QString &id : groupIds(list, item.value(QStringLiteral("trash_group_id")).toString())) {
+            m_blobs.remove(id);
+            drop(list, id);
+        }
+        return jsonReply(202, QJsonObject{{QStringLiteral("item"), item}, {QStringLiteral("cleanup_pending"), true}});
+    }
+
+    // The ids of the trashed items of trash group `group` in `list`.
+    static QStringList groupIds(const QJsonArray &list, const QString &group)
+    {
+        QStringList ids;
+        for (const QJsonValue &value : list) {
+            const QJsonObject row = value.toObject();
+            if (row.value(QStringLiteral("state")).toString() == QLatin1String("trashed")
+                && row.value(QStringLiteral("trash_group_id")).toString() == group)
+                ids.append(jsonId(row.value(QStringLiteral("id"))));
+        }
+        return ids;
+    }
+
+    // POST items/download-urls: a signed download for each entry, by item
+    // (and version) or by path from the space root or, relative, from the
+    // folder of the document holding `via_version_id`. An entry that cannot
+    // be signed answers its own `error`, as Core does, and the others stand.
+    std::optional<QByteArray> downloadUrls(const QString &orgId, const QJsonObject &json)
+    {
+        const QString spaceId = json.value(QStringLiteral("space_id")).toString();
+        if (byId(m_spaces.value(orgId), spaceId).isEmpty())
+            return errorReply(404, QStringLiteral("not_found"));
+        const QJsonArray entries = json.value(QStringLiteral("items")).toArray();
+        QJsonArray data;
+        for (qsizetype index = 0; index < entries.size(); ++index) {
+            const QJsonObject entry = entries.at(index).toObject();
+            QString itemId = jsonId(entry.value(QStringLiteral("item_id")));
+            QString versionId = entry.value(QStringLiteral("version_id")).toString();
+            if (entry.contains(QStringLiteral("path"))) {
+                itemId = itemAtPath(spaceId, entry.value(QStringLiteral("path")).toString(),
+                                    json.value(QStringLiteral("via_version_id")).toString());
+                versionId.clear();
+            }
+            const QJsonObject item = byId(m_items.value(spaceId), itemId);
+            QJsonObject download;
+            if (item.isEmpty()) {
+                download.insert(QStringLiteral("error"), QStringLiteral("not_found"));
+            } else if (item.value(QStringLiteral("state")).toString() != QLatin1String("active")) {
+                download.insert(QStringLiteral("error"), QStringLiteral("trashed"));
+            } else {
+                if (versionId.isEmpty())
+                    versionId = facetOf(item).value(QStringLiteral("current_version_id")).toString();
+                download = signedUrl(itemId, versionId);
+                download.insert(QStringLiteral("item_id"), itemId);
+                download.insert(QStringLiteral("version_id"), versionId);
+            }
+            download.insert(QStringLiteral("index"), int(index));
+            data.append(download);
+        }
+        return jsonReply(200, QJsonObject{{QStringLiteral("data"), data}, {QStringLiteral("request_id"), requestId()}});
+    }
+
+    // The item at `path` in `spaceId`: from the space root when it starts with
+    // "/", else from the folder of the document that holds `viaVersionId`.
+    // Empty when no live item is there.
+    QString itemAtPath(const QString &spaceId, const QString &path, const QString &viaVersionId) const
+    {
+        const QJsonArray list = m_items.value(spaceId);
+        bool anchored = path.startsWith(QLatin1Char('/'));
+        QString parentId;
+        for (qsizetype at = 0; !anchored && at < list.size(); ++at) {
+            const QJsonObject row = list.at(at).toObject();
+            const QJsonArray versions = m_history.value(jsonId(row.value(QStringLiteral("id"))));
+            if (std::any_of(versions.begin(), versions.end(), [&](const QJsonValue &version) {
+                    return version.toObject().value(QStringLiteral("id")).toString() == viaVersionId;
+                })) {
+                parentId = jsonId(row.value(QStringLiteral("parent_id")));
+                anchored = true;
+            }
+        }
+        if (!anchored)
+            return {};
+        for (const QString &segment : path.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+            QString next;
+            for (const QJsonValue &value : list) {
+                const QJsonObject row = value.toObject();
+                if (row.value(QStringLiteral("state")).toString() == QLatin1String("active")
+                    && jsonId(row.value(QStringLiteral("parent_id"))) == parentId
+                    && row.value(QStringLiteral("name")).toString() == segment)
+                    next = jsonId(row.value(QStringLiteral("id")));
+            }
+            if (next.isEmpty())
+                return {};
+            parentId = next;
+        }
+        return parentId;
+    }
+
+    // The signed download of `versionId` of the item `itemId`, or of the
+    // item's own bytes when no version of that id holds bytes.
+    QJsonObject signedUrl(const QString &itemId, const QString &versionId) const
+    {
+        return {{QStringLiteral("url"), origin() + QStringLiteral("/files/")
+                                         + (m_blobs.contains(versionId) ? versionId : itemId)},
+                {QStringLiteral("method"), QStringLiteral("GET")}};
+    }
+
+    // The space of the organization `orgId` that holds the item `itemId`;
+    // empty when none does.
+    QString spaceOf(const QString &orgId, const QString &itemId) const
+    {
+        for (const QJsonValue &space : m_spaces.value(orgId)) {
+            const QString spaceId = jsonId(space.toObject().value(QStringLiteral("id")));
+            if (!byId(m_items.value(spaceId), itemId).isEmpty())
+                return spaceId;
+        }
+        return {};
+    }
+
+    // 428 `code` (revision_required, or precondition_required for items)
+    // unless If-Match or the body names a revision; 409 revision_conflict
+    // unless it names the stored revision of `item`.
+    std::optional<QByteArray> refuseItemRevision(const QJsonObject &item, const QJsonObject &json,
+                                                 const QString &code = QStringLiteral("revision_required")) const
+    {
+        const QString given = !m_lastMatch.isEmpty() ? m_lastMatch
+                            : json.contains(QStringLiteral("revision")) ? QString::number(json.value(QStringLiteral("revision")).toInt())
+                                                                        : QString();
+        if (given.isEmpty())
+            return errorReply(428, code);
+        if (given != QString::number(item.value(QStringLiteral("revision")).toInt()))
+            return errorReply(409, QStringLiteral("revision_conflict"));
+        return std::nullopt;
+    }
+
+    // 422 parent_folder_not_found unless `parentId` is empty (the root) or
+    // an active folder of `spaceId`. Nothing when it is one.
+    std::optional<QByteArray> refuseParent(const QString &spaceId, const QString &parentId) const
+    {
+        if (parentId.isEmpty())
+            return std::nullopt;
+        const QJsonObject parent = byId(m_items.value(spaceId), parentId);
+        if (parent.value(QStringLiteral("kind")).toString() != QLatin1String("folder")
+            || parent.value(QStringLiteral("state")).toString() != QLatin1String("active"))
+            return errorReply(422, QStringLiteral("parent_folder_not_found"));
+        return std::nullopt;
+    }
+
+    // Core's naming rule for a folder or document named `name` (exactly as
+    // sent) in the parent `parentId` (the root when empty) of `spaceId`: 422
+    // invalid_name when it is empty, "." or "..", holds "/" or a control
+    // character, or is over 1024 bytes; 409 name_conflict when an active item
+    // of the same kind there, other than `selfId`, has the exact same name.
+    std::optional<QByteArray> refuseName(const QString &spaceId, const QString &parentId, const QString &kind,
+                                         const QString &name, const QString &selfId = {}) const
     {
         const bool unusable = name.isEmpty() || name == QLatin1String(".") || name == QLatin1String("..")
+                || name.toUtf8().size() > 1024
                 || std::any_of(name.cbegin(), name.cend(), [](QChar c) {
-                       return c == QLatin1Char('/') || c == QLatin1Char('\\') || c.unicode() < 0x20
-                               || c.unicode() == 0x7f;
+                       return c == QLatin1Char('/') || (c.unicode() < 0x20 && c.unicode() != 0x09
+                                                       && c.unicode() != 0x0a && c.unicode() != 0x0d)
+                               || c.unicode() == 0xfffe || c.unicode() == 0xffff;
                    });
         if (unusable)
             return errorReply(422, QStringLiteral("invalid_name"));
-        const QString key = nameKey(name);
-        const auto holds = [&](const QJsonArray &list, const QString &parentField, const QString &nameField) {
-            return std::any_of(list.begin(), list.end(), [&](const QJsonValue &value) {
-                const QJsonObject item = value.toObject();
-                return jsonId(item.value(QStringLiteral("id"))) != selfId
-                        && item.value(parentField).toString() == parentId
-                        && nameKey(item.value(nameField).toString()) == key;
-            });
-        };
-        if (holds(m_folders.value(spaceId), QStringLiteral("parent_id"), QStringLiteral("name"))
-            || holds(m_documents.value(spaceId), QStringLiteral("folder_id"), QStringLiteral("title")))
+        const QJsonArray list = m_items.value(spaceId);
+        const bool taken = std::any_of(list.begin(), list.end(), [&](const QJsonValue &value) {
+            const QJsonObject item = value.toObject();
+            return jsonId(item.value(QStringLiteral("id"))) != selfId
+                    && item.value(QStringLiteral("state")).toString() == QLatin1String("active")
+                    && item.value(QStringLiteral("kind")).toString() == kind
+                    && jsonId(item.value(QStringLiteral("parent_id"))) == parentId
+                    && item.value(QStringLiteral("name")).toString() == name;
+        });
+        if (taken)
             return errorReply(409, QStringLiteral("name_conflict"));
         return std::nullopt;
     }
@@ -2653,26 +3136,10 @@ private:
     // Removes the item `id`, which `list` holds, from it.
     static void drop(QJsonArray &list, const QString &id) { list.removeAt(indexOf(list, id)); }
 
-    // True when the folder `id` holds a folder or a document, a trashed one
-    // included, as Core counts before it deletes a folder.
-    bool holdsAnything(const QString &spaceId, const QString &id) const
-    {
-        const auto holds = [&](const QJsonArray &list, const QString &parentField) {
-            return std::any_of(list.begin(), list.end(), [&](const QJsonValue &value) {
-                return value.toObject().value(parentField).toString() == id;
-            });
-        };
-        return holds(m_folders.value(spaceId), QStringLiteral("parent_id"))
-                || holds(m_documents.value(spaceId), QStringLiteral("folder_id"))
-                || std::any_of(m_trashed.cbegin(), m_trashed.cend(), [&](const QJsonObject &doc) {
-                       return doc.value(QStringLiteral("folder_id")).toString() == id;
-                   });
-    }
-
     // True when `parentId` is the folder `id` itself or anywhere below it.
     bool movesInside(const QString &spaceId, const QString &id, const QString &parentId) const
     {
-        const QJsonArray list = m_folders.value(spaceId);
+        const QJsonArray list = m_items.value(spaceId);
         for (QString at = parentId; !at.isEmpty();
              at = byId(list, at).value(QStringLiteral("parent_id")).toString()) {
             if (at == id)
@@ -2768,7 +3235,8 @@ private:
                     QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals
                             | QByteArray::AbortOnBase64DecodingErrors);
             after = QString::fromLatin1(decoded.decoded);
-            static const QRegularExpression id(QStringLiteral("^(?:[0-9]+|[a-z]+-[0-9]+)$"));
+            static const QRegularExpression id(QStringLiteral(
+                    "^(?:[0-9]+|[a-z]+-[0-9]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"));
             if (!decoded || !id.match(after).hasMatch())
                 return errorReply(400, QStringLiteral("invalid_cursor"));
         }
@@ -2940,8 +3408,8 @@ private:
     QHash<QString, QJsonArray> m_invitations;
     int m_nextPerson = 0;
     QHash<QString, QJsonArray> m_spaces;
-    QHash<QString, QJsonArray> m_folders;
-    QHash<QString, QJsonArray> m_documents;
+    // The folders and documents of each space, trashed ones included.
+    QHash<QString, QJsonArray> m_items;
     QString m_lastPath;
     QString m_lastQuery;
     QByteArray m_lastBody;
@@ -2952,13 +3420,16 @@ private:
     int m_hits = 0;
     int m_nextOrg = 0;
     int m_nextSpace = 0;
-    int m_nextFolder = 0;
-    int m_nextDocument = 0;
     int m_nextUpload = 0;
     int m_nextVersion = 0;
     QHash<QString, QJsonObject> m_uploads;
     QHash<QString, QByteArray> m_blobs;
-    QHash<QString, QJsonObject> m_trashed;
+    // The reviews each managed document's uploads opened, newest first.
+    QHash<QString, QJsonArray> m_reviews;
+    // Each document's published versions, oldest first, and the links each
+    // version's upload declared.
+    QHash<QString, QJsonArray> m_history;
+    QHash<QString, QJsonArray> m_versionReferences;
     QHash<QString, QJsonObject> m_references;
 };
 

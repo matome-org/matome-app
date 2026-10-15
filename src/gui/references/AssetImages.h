@@ -15,7 +15,8 @@ void installAssetImages(QQmlEngine &engine, Session &session);
 
 /// The clipboard's image, for pasting into the Markdown editor: copied
 /// pixels, copied PNG bytes, or a copied image file. WebAssembly hands a
-/// pasted image over as a file it wrote under /qt/tmp.
+/// pasted image over as a file it wrote under /qt/tmp. Text copied from a
+/// rendered document goes in through it too.
 class Clipboard : public QObject
 {
     Q_OBJECT
@@ -29,6 +30,7 @@ public:
     Q_INVOKABLE QByteArray image() const;
     /// The copied image file's name; empty for pasted pixels.
     Q_INVOKABLE QString imageName() const;
+    Q_INVOKABLE void setText(const QString &text) const;
 
 private:
     QString imageFile() const;

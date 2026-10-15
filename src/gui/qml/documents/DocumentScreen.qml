@@ -10,14 +10,19 @@ import "../screens"
 import "../chrome/Messages.js" as Messages
 import "../chrome/Commands.js" as Commands
 
-// Any document of the open space, opened from the explorer: a preview of
-// the selected version when its type has one, an editor for Markdown and
-// text, the list of versions, and the documents it links or that link it.
-// Every verb is a row of Session.commandList,
-// so its button, key, and sheet entry agree. The controlled-documents
-// add-on, when it applies, adds its Reviews tab and turns a save into a
-// review; a review opened from that tab takes the whole screen, one level
-// below the document. Nothing here depends on the add-on being there.
+// Any document of the open space, opened from the explorer, on a detail
+// page: the way back to its folder, its name and state, one command bar,
+// and the tabs Preview, Versions, Related, and, while it is managed with
+// reviews, Reviews. Editing a Markdown or text document is a mode of its
+// own that takes the screen; leaving it with changes asks first. Its switch
+// shows the text (Write), the rendered draft (Preview), or both side by
+// side, scrolled together by source line (Split). Every verb
+// is a row of Session.commandList, so its button, key, and sheet entry
+// agree. The controlled-documents add-on, when it applies, adds its Reviews
+// tab and turns a save into a proposed change; a review opened from it
+// takes the whole screen, one level below the document. Two versions
+// compared from the Versions tab take it the same way. Nothing here
+// depends on the add-on being there.
 FocusScope {
     id: screen
 
@@ -26,10 +31,11 @@ FocusScope {
 
     readonly property var view: Session.documentView
     readonly property var control: Session.controlledDocs
+    readonly property bool editing: view.editing
     readonly property bool managed: control.active && control.controlled
     readonly property bool inReview: control.active && control.review.id !== undefined
     // The opened review still awaits a decision.
-    readonly property bool reviewOpen: screen.inReview && control.review.status === "open"
+    readonly property bool comparing: view.comparison.from !== undefined
     readonly property bool narrow: screen.width < 600
     readonly property bool touch: screen.narrow || Qt.platform.os === "android"
     // The editor holds the proposal of one of the author's reviews.
@@ -38,20 +44,32 @@ FocusScope {
         return review.id === control.proposalReviewId })?.reason ?? ""
     // Core's conflict markers are still in the proposal.
     readonly property bool conflicted: screen.proposing && /^(<<<<<<< published|>>>>>>> review)$/m.test(editor.text)
-    readonly property bool dirty: view.editable && (editor.text !== view.text || screen.proposing)
-    readonly property var tabs: ["view", "edit", "versions", "related", "reviews"]
-    readonly property bool unrelated: view.relatedLoaded && view.incoming.length === 0 && view.outgoing.length === 0
-                                      && view.hiddenCount === 0
+    readonly property bool dirty: screen.editing && (editor.text !== view.text || screen.proposing)
+    // The document's open reviews, the one Open review opens first.
+    readonly property var openReviews: control.active ? control.reviews.filter(function (review) { return review.status === "open" }) : []
     // Manage with reviews in this space, as the space's catalog judges it.
     readonly property var manageAnswer: Session.permissions.revision >= 0
                                         ? Session.permissions.explain("addon.controlled_docs.document_manage", Session.currentSpaceId) : ({})
     // Managing applies to Markdown where Core offers the add-on, or to a
     // document already managed.
     readonly property bool manageable: screen.managed || (screen.view.kind === "markdown" && screen.manageAnswer.listed === true)
-    property string draftView: "write"
+    // One table row per document linked from or linking this one.
+    readonly property var relatedRows: view.incoming.map(function (item, index) { return screen.relatedRow(item, true, index) })
+                                       .concat(view.outgoing.map(function (item, index) { return screen.relatedRow(item, false, index) }))
+    // What the editor shows: "write", "preview", or "split".
+    property string editMode: "write"
+    // Split shows both sides only where they fit.
+    readonly property bool splitting: screen.editMode === "split" && !screen.narrow
+    // The text the draft preview renders, a moment behind the editor's.
+    property string draftText
+    // The preview, not the editor, drives the scrolling of both.
+    readonly property bool previewLeads: draftHover.hovered || draft.list.activeFocus
+    // What the side panel asks before: "propose", "update", or "leave" (a
+    // save of the editor, or leaving it), a review decision ("approve",
+    // "reject", "cancel"), or "unmanage".
     property string pendingAction
-    // The document selected on the Related tab, when it opens.
-    property string relatedPick
+    // What follows once the editor is left: "close" closes the document.
+    property string leaving
 
     function command(id) { return Commands.find(Session.commandList, id) }
     // Why Core refused `action` here with `code`, from the space's catalog
@@ -60,52 +78,167 @@ FocusScope {
         return Messages.refused(code, Session.permissions.revision >= 0 ? Session.permissions.explain(action, Session.currentSpaceId) : ({}),
                                 Messages.controlledFailure)
     }
+    function personName(id) {
+        const key = String(id ?? "")
+        const member = key === "" ? null
+                     : Session.accessDirectory.members.find(function (person) { return person.id === key })
+                       ?? screen.control.members.find(function (person) { return String(person.id) === key })
+        return member?.label ?? ""
+    }
+    function when(time) {
+        return time ? new Date(time).toLocaleString(Qt.locale(), Locale.ShortFormat) : ""
+    }
     // One row of the Related tab from Core's incoming or outgoing reference.
-    function relatedRow(item, incoming) {
-        const join = function (parts) { return parts.filter(function (part) { return part !== "" }).join(" · ") }
+    function relatedRow(item, incoming, index) {
         if (incoming)
-            return { id: String(item.document_id), title: item.title ?? "", openable: true,
-                     detail: join([item.path ?? "", (item.modes ?? []).indexOf("path") >= 0 ? qsTr("By path") : ""]) }
+            return { key: "in" + index, id: String(item.item_id), title: item.name ?? "", openable: true,
+                     direction: qsTr("Linked from"), state: (item.modes ?? []).indexOf("path") >= 0 ? qsTr("By path") : "" }
         const target = item.target ?? {}
         const ok = target.state === "ok"
-        return { id: ok ? String(target.document_id) : "",
-                 title: target.title ?? item.path ?? qsTr("Unavailable file"),
-                 detail: join([target.path ?? "", Messages.referenceState(target.state),
-                               item.mode === "version" ? qsTr("Pinned version") : item.mode === "path" ? qsTr("By path") : ""]),
-                 openable: ok }
+        return { key: "out" + index, id: ok ? String(target.item_id) : "", openable: ok,
+                 title: target.name ?? item.path ?? qsTr("Unavailable file"), direction: qsTr("Links to"),
+                 state: [Messages.referenceState(target.state),
+                         item.mode === "version" ? qsTr("Pinned version") : item.mode === "path" ? qsTr("By path") : ""]
+                        .filter(function (part) { return part !== "" }).join(" · ") }
+    }
+    function openVersion(version) {
+        screen.view.selectVersion(version.id)
+        Session.runCommand("view-tab")
     }
     function dismiss() {
         if (panel.shown) panel.dismiss()
+        else if (screen.comparing) screen.view.stopComparing()
         else if (screen.inReview) Session.runCommand("close-review")
-        else if (screen.dirty) screen.ask("close")
+        else if (screen.editing) screen.leaveEditor("")
         else screen.view.close()
     }
-    // Asks in the side panel before `action`: "save", "discard", "close",
-    // "unmanage", or a review decision ("approve", "reject", "cancel").
+    // Leaves the editor, asking first while it holds changes; `then` is
+    // what follows ("close").
+    function leaveEditor(then) {
+        screen.leaving = then
+        if (screen.dirty)
+            screen.ask("leave")
+        else
+            screen.finishLeaving()
+    }
+    function finishLeaving() {
+        screen.view.stopEditing()
+        screen.control.clearProposal()
+        if (screen.leaving === "close")
+            screen.view.close()
+        screen.leaving = ""
+    }
+    // A plain document saves at once; a managed one proposes the change.
+    function save() {
+        if (!screen.dirty || screen.conflicted)
+            return
+        if (screen.proposing)
+            screen.ask("update")
+        else if (screen.managed)
+            screen.ask("propose")
+        else
+            screen.view.save(editor.text, "", !screen.control.pinsLinks, screen.control.proposal())
+    }
+    function setMode(mode) {
+        if (mode === "split" && screen.narrow)
+            return
+        redraft.stop()
+        screen.draftText = editor.text
+        screen.editMode = mode
+        if (mode === "preview")
+            draft.list.forceActiveFocus()
+        else
+            editor.forceActiveFocus()
+        if (screen.splitting)
+            Qt.callLater(screen.followEditor)
+    }
+    // A segment of the editor's mode switch from command `id`, unusable
+    // with `reason` too.
+    function modeOption(id, reason) {
+        const command = screen.command(id)
+        return { value: id.slice(0, -5), text: command.title, icon: command.icon, key: Commands.keys(command)[0] ?? "",
+                 usable: command.usable && reason === "", reason: reason }
+    }
+    // The source line at the top of the editor, a fraction down it.
+    function editorLine(): real {
+        const text = editor.text
+        const top = editorPage.contentY - editor.y
+        const at = editor.positionAt(editor.leftPadding, Math.max(editor.topPadding, top))
+        const start = text.lastIndexOf("\n", at - 1) + 1
+        const next = text.indexOf("\n", at)
+        const from = editor.positionToRectangle(start)
+        const to = editor.positionToRectangle(next < 0 ? text.length : next)
+        const share = (top - from.y) / Math.max(1, to.y + to.height - from.y)
+        return text.slice(0, start).split("\n").length + Math.max(0, Math.min(1, share))
+    }
+    // Scrolls the editor to source line `line`, a fraction down it.
+    function showEditorLine(line: real) {
+        const text = editor.text
+        let start = 0
+        for (let at = 1; at < Math.floor(line); ++at) {
+            const next = text.indexOf("\n", start)
+            if (next < 0)
+                break
+            start = next + 1
+        }
+        const next = text.indexOf("\n", start)
+        const from = editor.positionToRectangle(start)
+        const to = editor.positionToRectangle(next < 0 ? text.length : next)
+        const y = editor.y + from.y + (line - Math.floor(line)) * (to.y + to.height - from.y)
+        editorPage.contentY = Math.max(0, Math.min(Math.max(0, editorPage.contentHeight - editorPage.height), y))
+    }
+    function followEditor() {
+        if (screen.splitting)
+            draft.showLine(screen.editorLine())
+    }
     function ask(action) {
         screen.pendingAction = action
         panel.show(askPanel, screen.Window.activeFocusItem)
     }
     // The verbs the document screen and the add-on hand back to it.
     function perform(id) {
-        if (id === "save-document" && screen.dirty && !screen.conflicted) screen.ask("save")
-        else if (id === "discard-changes" && screen.dirty) screen.ask("discard")
+        if (id === "save-document") screen.save()
+        else if (id === "discard-changes") screen.leaveEditor("")
         else if (id === "insert-image") Session.assets.pickImages()
+        else if (id.endsWith("-mode")) screen.setMode(id.slice(0, -5))
         else if (id === "approve-review") screen.ask("approve")
         else if (id === "reject-review") screen.ask("reject")
         else if (id === "cancel-review") screen.ask("cancel")
         else if (id === "unmanage-document") screen.ask("unmanage")
     }
-    function focusDefault() { header.backButton.forceActiveFocus() }
+    function focusDefault() {
+        if (screen.editing)
+            editor.forceActiveFocus()
+        else if (screen.comparing)
+            comparePage.backButton.forceActiveFocus()
+        else if (screen.inReview)
+            reviewPage.backButton.forceActiveFocus()
+        else if (preview.visible)
+            preview.list.forceActiveFocus()
+        else
+            page.backButton.forceActiveFocus()
+    }
+
     // Going into a review or back out of it keeps the keyboard where it went.
     onInReviewChanged: if (screen.visible) {
         if (screen.inReview) screen.focusDefault()
-        else reviewList.focusList()
+        else reviews.focusList()
+    }
+    onComparingChanged: if (screen.visible) {
+        if (screen.comparing) screen.focusDefault()
+        else versions.focusKey(versions.cursorKey)
+    }
+    // The editor opens on the published text, or on a proposal handed to it.
+    onEditingChanged: {
+        screen.editMode = "write"
+        if (screen.editing && !screen.proposing)
+            editor.text = screen.view.text
+        if (screen.visible)
+            Qt.callLater(screen.focusDefault)
     }
     // Back from Settings, the space may require reviews now.
     // The roles a refusal names come from the organization's directory.
     onVisibleChanged: if (visible) {
-        screen.draftView = "write"
         screen.control.refresh()
         if (!Session.accessDirectory.active) Session.accessDirectory.open()
         focusDefault()
@@ -115,19 +248,23 @@ FocusScope {
 
     Connections {
         target: Session.documentView
-        function onTextChanged() { editor.text = screen.view.text }
         function onRequested(id) { screen.perform(id) }
-        function onOpened() { screen.relatedPick = "" }
         function onSaved() {
             if (screen.view.notice === "review_requested" || screen.view.notice === "review_updated")
                 screen.view.tab = "reviews"
+            if (screen.leaving === "close")
+                screen.view.close()
+            screen.leaving = ""
         }
         function onChanged() {
-            if (screen.view.errorIndex < 0 || screen.view.tab !== "edit")
+            if (page.current !== screen.view.tab && screen.view.tab !== "")
+                page.current = screen.view.tab
+            if (screen.view.errorIndex < 0 || !screen.editing)
                 return
             const at = Session.assets.referenceAt(editor.text, screen.view.errorIndex, !screen.control.pinsLinks)
             if (at.start !== undefined) {
-                screen.draftView = "write"
+                if (screen.editMode === "preview")
+                    screen.setMode("write")
                 editor.select(at.start, at.start + at.length)
                 editor.forceActiveFocus()
             }
@@ -140,13 +277,11 @@ FocusScope {
         // the editor with the cursor on its first conflict.
         function onProposalReady(text, conflicts) {
             editor.text = text
-            screen.draftView = "write"
-            screen.view.tab = "edit"
+            Session.runCommand("edit-document")
             const at = conflicts > 0 ? text.search(/^<<<<<<< published$/m) : -1
             editor.cursorPosition = Math.max(0, at)
             if (at >= 0)
                 editor.select(at, at + "<<<<<<< published".length)
-            editor.forceActiveFocus()
         }
     }
     Connections {
@@ -162,213 +297,111 @@ FocusScope {
         onAccepted: Session.assets.uploadUrls(imagePicker.selectedFiles)
     }
 
-    ColumnLayout {
+    DetailPage {
+        id: page
+        objectName: "documentPage"
+        visible: !screen.editing && !screen.inReview && !screen.comparing
         anchors.fill: parent
-        anchors.rightMargin: panel.reserve
-        spacing: 0
-
-        ScreenHeader {
-            id: header
-            Layout.fillWidth: true
-            narrow: screen.narrow
-            caption: screen.inReview ? screen.view.place.concat([screen.view.title, qsTr("Reviews")]).join(" › ")
-                                     : screen.view.place.join(" › ")
-            title: screen.inReview ? screen.control.review.reason : screen.view.title
-            backText: screen.inReview ? qsTr("Back to reviews") : qsTr("Back to files")
-            backName: "closeDocumentButton"
-            refreshName: "refreshDocumentButton"
-            refreshKey: "F5"
-            refreshUsable: screen.command("refresh").usable
-            onBackRequested: screen.dismiss()
-            onRefreshRequested: Session.runCommand("refresh")
+        anchors.margins: screen.narrow ? Theme.gapM : Theme.gapXl
+        anchors.rightMargin: panel.reserve + (screen.narrow ? Theme.gapM : Theme.gapXl)
+        name: "document"
+        narrow: screen.narrow
+        backText: screen.view.place.join(" › ")
+        title: screen.view.title
+        chips: [screen.view.version.id === undefined ? ""
+                : screen.view.latest ? qsTr("Version %1").arg(screen.view.version.version_number)
+                : qsTr("Version %1").arg(screen.view.version.version_number) + " · " + qsTr("Earlier version"),
+                screen.managed ? qsTr("Managed") : "",
+                screen.openReviews.length > 0 ? qsTr("Review open") : ""].filter(function (chip) { return chip !== "" })
+        subject: screen.view.documentId
+        start: "view"
+        onBackRequested: screen.dismiss()
+        onCurrentChanged: if (page.current !== "" && page.current !== screen.view.tab && screen.view.active) {
+            Session.runCommand(page.current + "-tab")
+            page.current = screen.view.tab
         }
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.margins: screen.narrow ? Theme.gapM : Theme.gapXl
-            spacing: Theme.gapM
-
-            Item {
-                Layout.fillWidth: true
-                implicitHeight: bar.implicitHeight + Theme.gapM + 1
-                RowLayout {
-                    id: bar
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    spacing: Theme.gapL
-                    RowLayout {
-                        visible: !screen.inReview
-                        spacing: Theme.gapXs
-                        Accessible.role: Accessible.PageTabList
-                        Repeater {
-                            model: screen.tabs
-                            delegate: ViewTab {
-                                id: tab
-                                required property string modelData
-                                readonly property var command: screen.command(tab.modelData + "-tab")
-                                objectName: "documentTab_" + tab.modelData
-                                visible: tab.command.usable
-                                view: tab.modelData
-                                current: screen.view.tab
-                                text: tab.command.title
-                                icon: tab.command.icon
-                                showLabel: !screen.narrow
-                                tip: tab.command.title
-                                key: Commands.keys(tab.command)[0] ?? ""
-                                onPicked: function (view) { Session.runCommand(view + "-tab") }
-                            }
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                    CommandBar {
-                        Accessible.role: Accessible.ToolBar
-                        Accessible.name: screen.view.title
-
-                        CommandButton {
-                            id: manage
-                            commandId: "manage-document"
-                            visible: screen.view.tab === "view" && screen.manageable
-                            showLabel: !screen.narrow
-                            reason: screen.managed ? qsTr("It is managed with reviews already.") : Messages.refusal(screen.manageAnswer)
-                        }
-                        ActionButton {
-                            id: fix
-                            objectName: "manageFixButton"
-                            visible: manage.visible && !screen.managed && screen.manageAnswer.canFix === true
-                            text: Messages.fixName(screen.manageAnswer.fix ?? "")
-                            icon: "settings"
-                            showLabel: !screen.narrow
-                            tip: screen.narrow ? text : ""
-                            onActivated: screen.fixRequested(screen.manageAnswer)
-                        }
-                        CommandButton {
-                            id: unmanage
-                            commandId: "unmanage-document"
-                            visible: manage.visible
-                            showLabel: !screen.narrow
-                            reason: screen.managed ? "" : qsTr("It is not managed with reviews.")
-                        }
-                        CommandButton { commandId: "download-version"; visible: screen.view.tab === "view" || screen.view.tab === "versions"; showLabel: !screen.narrow }
-                        ActionButton {
-                            visible: screen.view.tab === "versions"
-                            text: qsTr("Show this version")
-                            icon: "document"
-                            primary: true
-                            usable: screen.command("view-tab").usable
-                            onActivated: Session.runCommand("view-tab")
-                        }
-                        ActionButton {
-                            objectName: "openRelatedButton"
-                            visible: screen.view.tab === "related"
-                            text: qsTr("Open")
-                            icon: "forward"
-                            primary: true
-                            usable: screen.relatedPick !== ""
-                            onActivated: Session.openEntry("document", screen.relatedPick)
-                        }
-
-                        CommandButton { commandId: "insert-image"; visible: screen.view.tab === "edit" && screen.view.kind === "markdown"; showLabel: !screen.narrow }
-                        CommandButton {
-                            id: discard
-                            commandId: "discard-changes"
-                            visible: screen.view.tab === "edit"
-                            showLabel: !screen.narrow
-                            usable: discard.command.usable && screen.dirty
-                        }
-                        CommandButton {
-                            id: save
-                            commandId: "save-document"
-                            visible: screen.view.tab === "edit"
-                            primary: true
-                            text: screen.proposing ? qsTr("Update review") : screen.managed ? qsTr("Submit for review") : save.command.title
-                            usable: save.command.usable && screen.dirty && !screen.conflicted && !Session.assets.uploading
-                        }
-
-                        CommandButton { commandId: "open-review"; visible: screen.view.tab === "reviews" && !screen.inReview; primary: true }
-
-                        CommandButton { commandId: "download-candidate"; visible: screen.inReview; showLabel: !screen.narrow }
-                        CommandButton {
-                            commandId: "edit-proposal"
-                            visible: screen.reviewOpen
-                            showLabel: !screen.narrow
-                            reason: !screen.control.authored ? qsTr("Only its author edits it.")
-                                  : screen.control.review.merge_state === "dirty" ? qsTr("Resolve its conflicts first.") : ""
-                        }
-                        CommandButton {
-                            commandId: "resolve-conflicts"
-                            visible: screen.reviewOpen
-                            showLabel: !screen.narrow
-                            reason: !screen.control.authored ? qsTr("Only its author resolves its conflicts.")
-                                  : screen.control.review.merge_state !== "dirty" ? qsTr("It has no conflicts.") : ""
-                        }
-                        CommandButton {
-                            commandId: "update-review"
-                            visible: screen.reviewOpen
-                            showLabel: !screen.narrow
-                            reason: !screen.control.authored ? qsTr("Only its author updates it.")
-                                  : screen.control.review.merge_state !== "behind" ? qsTr("It is based on the published version.") : ""
-                        }
-                        BarRule { visible: screen.reviewOpen }
-                        CommandButton { commandId: "cancel-review"; visible: screen.reviewOpen; showLabel: !screen.narrow }
-                        CommandButton { commandId: "reject-review"; visible: screen.reviewOpen; showLabel: !screen.narrow }
-                        CommandButton { commandId: "approve-review"; visible: screen.reviewOpen; primary: true }
-                    }
-                }
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: Theme.border
-                }
-            }
-
+        notes: [
             Label {
-                objectName: "documentVersion"
-                visible: screen.view.version.id !== undefined && !screen.inReview
-                text: [qsTr("Version %1").arg(screen.view.version.version_number ?? ""),
-                       screen.view.version.published_at ? new Date(screen.view.version.published_at).toLocaleString(Qt.locale(), Locale.ShortFormat) : "",
-                       screen.view.latest ? qsTr("Current") : qsTr("Earlier version"),
-                       screen.managed ? (screen.control.openReviews > 0
-                                         ? qsTr("Managed · %n open review(s)", "", screen.control.openReviews) : qsTr("Managed")) : ""]
-                      .filter(function (part) { return part !== "" }).join(" · ")
-            }
-            Label {
-                objectName: "documentError"
-                visible: screen.view.errorCode !== ""
-                color: Theme.failed
-                text: screen.refusal(screen.view.errorCode, "document.new_version")
-                Accessible.role: Accessible.AlertMessage
-            }
-            Label {
-                objectName: "controlError"
-                visible: screen.control.active && screen.control.errorCode !== ""
-                color: Theme.failed
-                text: screen.managed ? Messages.controlledFailure(screen.control.errorCode)
-                                     : screen.refusal(screen.control.errorCode, "addon.controlled_docs.document_manage")
-                Accessible.role: Accessible.AlertMessage
-            }
-            Notice {
-                code: screen.view.notice !== "" ? screen.view.notice : screen.control.active ? screen.control.notice : ""
-                place: screen.view.documentId + ":" + screen.view.tab
-                text: Messages.documentNotice(code)
-            }
-            Label { visible: screen.view.busy; text: qsTr("Working…") }
+                objectName: "reviewState"
+                visible: screen.openReviews.length > 0
+                color: Theme.accentText
+                text: qsTr("%n review(s) open · %1/%2 approvals", "", screen.openReviews.length)
+                      .arg(screen.openReviews[0]?.approvals?.length ?? 0)
+                      .arg(Math.max(1, screen.openReviews[0]?.settings?.required_approvals ?? 1))
+            },
+            Standing {}
+        ]
 
-            Page {
-                visible: screen.view.tab === "view"
+        commands: [
+            CommandButton {
+                commandId: "edit-document"
+                primary: true
+                showLabel: !page.compact
+                reason: screen.view.kind !== "markdown" && screen.view.kind !== "text" ? qsTr("Only Markdown and text documents are edited here.")
+                      : !screen.view.latest ? qsTr("Only the current version is edited.") : ""
+            },
+            CommandButton { commandId: "download-version"; showLabel: !page.compact },
+            ActionButton {
+                id: details
+                objectName: "documentDetailsButton"
+                text: qsTr("Details")
+                icon: "info"
+                showLabel: !page.compact
+                tip: page.compact ? text : ""
+                onActivated: panel.show(detailsPanel, details)
+            },
+            BarRule { visible: manage.visible },
+            CommandButton {
+                id: manage
+                commandId: "manage-document"
+                visible: screen.manageable
+                showLabel: !page.compact
+                reason: screen.managed ? qsTr("It is managed with reviews already.") : Messages.refusal(screen.manageAnswer)
+            },
+            ActionButton {
+                objectName: "manageFixButton"
+                visible: manage.visible && !screen.managed && screen.manageAnswer.canFix === true
+                text: Messages.fixName(screen.manageAnswer.fix ?? "")
+                icon: "settings"
+                showLabel: !page.compact
+                tip: page.compact ? text : ""
+                onActivated: screen.fixRequested(screen.manageAnswer)
+            },
+            CommandButton {
+                commandId: "unmanage-document"
+                visible: manage.visible
+                showLabel: !page.compact
+                reason: screen.managed ? "" : qsTr("It is not managed with reviews.")
+            },
+            CommandButton {
+                commandId: "open-review"
+                visible: screen.managed && page.current !== "reviews"
+                showLabel: !page.compact
+                reason: qsTr("No review is open.")
+            }
+        ]
+
+        DetailTab {
+            view: "view"
+            title: qsTr("Preview")
+
+            MarkdownView {
+                id: preview
+                objectName: "documentPreview"
+                visible: screen.view.kind === "markdown" && screen.view.textLoaded
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                MarkdownView {
-                    objectName: "documentPreview"
-                    onDocumentRequested: function (id) { Session.openEntry("document", id) }
-                    visible: screen.view.kind === "markdown" && screen.view.textLoaded
-                    markdown: screen.view.kind === "markdown" ? screen.view.text : ""
-                    via: screen.view.version.id ?? ""
-                    Accessible.name: screen.view.title
-                }
+                markdown: screen.view.kind === "markdown" ? screen.view.text : ""
+                via: screen.view.version.id ?? ""
+                touch: screen.touch
+                Accessible.name: screen.view.title
+                onDocumentRequested: function (id) { Session.openEntry("document", id) }
+            }
+            Page {
+                visible: !preview.visible
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 Image {
                     objectName: "documentImage"
                     visible: screen.view.kind === "image"
@@ -409,65 +442,219 @@ FocusScope {
                     text: qsTr("There is no preview for this type of file. Download it to open it on your device.")
                 }
             }
+        }
+
+        DetailTab {
+            view: "versions"
+            title: qsTr("Versions")
+
+            commands: [
+                ActionButton {
+                    objectName: "versionOpenButton"
+                    text: qsTr("Open")
+                    icon: "forward"
+                    showLabel: !page.compact
+                    tip: page.compact ? text : ""
+                    usable: versions.selectedRow !== null && !screen.view.busy
+                    reason: qsTr("Select one row.")
+                    onActivated: screen.openVersion(versions.selectedRow)
+                },
+                ActionButton {
+                    objectName: "versionCompareButton"
+                    readonly property var picked: versions.selectedRows
+                    text: qsTr("Compare")
+                    icon: "diff"
+                    showLabel: !page.compact
+                    tip: page.compact ? text : ""
+                    usable: !screen.view.busy && screen.view.kind !== "none"
+                            && (picked.length === 2 || (picked.length === 1 && picked[0].current !== true))
+                    reason: screen.view.kind === "none" ? qsTr("Only text documents are compared.")
+                          : picked.length === 1 ? qsTr("Select an earlier version, or two versions.")
+                          : qsTr("Select one version to compare with the current one, or two versions.")
+                    onActivated: screen.view.compare(picked[0].id, picked.length === 2 ? picked[1].id : "")
+                }
+            ]
 
             Page {
-                visible: screen.view.tab === "edit"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Label {
-                    objectName: "proposalNotice"
-                    visible: screen.proposing
-                    color: Theme.accentText
-                    text: qsTr("You are editing the proposal of your review “%1”. Saving updates that review; discarding leaves it as it is.")
-                          .arg(screen.proposalReason)
+                Table {
+                    id: versions
+                    objectName: "versionTable"
+                    prefix: "version_"
+                    label: qsTr("Versions")
+                    touch: screen.touch
+                    multiSelect: true
+                    columns: [{ title: qsTr("Version"), share: 2 }, { title: qsTr("Date"), share: 2 }, { title: qsTr("Author"), share: 3 }]
+                    model: screen.view.versions
+                    cells: function (version) {
+                        return [qsTr("Version %1").arg(version.version_number) + (version.current ? " · " + qsTr("Current") : ""),
+                                screen.when(version.published_at), screen.personName(version.published_by_membership_id)]
+                    }
+                    onOpened: function (version) { screen.openVersion(version) }
+                }
+            }
+        }
+
+        DetailTab {
+            view: "related"
+            title: qsTr("Related")
+
+            commands: [
+                ActionButton {
+                    objectName: "relatedOpenButton"
+                    text: qsTr("Open")
+                    icon: "forward"
+                    showLabel: !page.compact
+                    tip: page.compact ? text : ""
+                    usable: related.selectedRow?.openable === true
+                    reason: related.selectedRow ? Messages.referenceState("forbidden") : qsTr("Select one row.")
+                    onActivated: Session.openEntry("document", related.selectedRow.id)
+                },
+                ActionButton {
+                    objectName: "relatedMoreButton"
+                    visible: screen.view.incomingMore || screen.view.outgoingMore
+                    text: qsTr("Show more")
+                    icon: "new"
+                    showLabel: !page.compact
+                    tip: page.compact ? text : ""
+                    usable: !screen.view.busy
+                    onActivated: screen.view.loadMoreRelated(screen.view.incomingMore ? "incoming" : "outgoing")
+                }
+            ]
+
+            Page {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Table {
+                    id: related
+                    objectName: "relatedTable"
+                    prefix: "related_"
+                    label: qsTr("Related")
+                    touch: screen.touch
+                    columns: [{ title: qsTr("Document"), share: 4 }, { title: qsTr("Direction"), share: 2 }, { title: qsTr("State"), share: 3 }]
+                    model: screen.relatedRows
+                    keyOf: function (row) { return row.key }
+                    cells: function (row) { return [row.title, row.direction, row.state] }
+                    emptyText: screen.view.relatedLoaded && screen.view.hiddenCount === 0 ? qsTr("No other document links this one, and it links none.") : ""
+                    onOpened: function (row) { if (row.openable) Session.openEntry("document", row.id) }
                 }
                 Label {
-                    objectName: "conflictNotice"
-                    visible: screen.conflicted
-                    color: Theme.failed
-                    text: qsTr("Resolve each conflict before saving: keep the text you want between <<<<<<< published and >>>>>>> review, then delete the three marker lines.")
-                    Accessible.role: Accessible.AlertMessage
+                    objectName: "relatedHidden"
+                    visible: screen.view.hiddenCount > 0
+                    text: qsTr("%n more document(s) you cannot open link this one.", "", screen.view.hiddenCount)
                 }
-                Label {
-                    text: screen.managed && !screen.proposing
-                          ? qsTr("Saving opens a new review of your changes. Other open reviews stay as they are.")
-                          : screen.view.kind === "markdown"
-                            ? qsTr("Paste or drop images to store them in the space's assets folder. Type @ or / to link a file, # at a line's start for actions.")
-                            : qsTr("Saving makes the edited text the document's next version.")
-                }
-                Label {
-                    visible: editor.assetError !== ""
-                    color: Theme.failed
-                    text: Messages.assetFailure(editor.assetError)
-                    Accessible.role: Accessible.AlertMessage
-                }
-                RowLayout {
-                    visible: screen.view.kind === "markdown"
-                    spacing: Theme.gapXs
-                    Accessible.role: Accessible.PageTabList
-                    ViewTab { view: "write"; current: screen.draftView; text: qsTr("Write"); icon: "rename"; onPicked: function (view) { screen.draftView = view } }
-                    ViewTab { view: "preview"; current: screen.draftView; text: qsTr("Preview"); icon: "document"; onPicked: function (view) { screen.draftView = view } }
-                }
-                MarkdownView {
-                    objectName: "draftPreview"
-                    opensLinks: false
-                    visible: screen.view.kind === "markdown" && screen.draftView === "preview"
-                    markdown: visible ? editor.text : ""
-                    via: screen.view.version.id ?? ""
-                    Accessible.name: qsTr("Preview")
-                }
+            }
+        }
+
+        ReviewList {
+            id: reviews
+            touch: screen.touch
+        }
+    }
+
+    DetailPage {
+        id: editPage
+        objectName: "editPage"
+        visible: screen.editing
+        anchors.fill: page
+        name: "edit"
+        narrow: screen.narrow
+        backText: qsTr("Back to preview")
+        title: screen.view.title
+        onBackRequested: screen.leaveEditor("")
+
+        notes: [
+            Label {
+                objectName: "proposalNotice"
+                visible: screen.proposing
+                color: Theme.accentText
+                text: qsTr("You are editing the proposal of your review “%1”. Saving updates that review; discarding leaves it as it is.")
+                      .arg(screen.proposalReason)
+            },
+            Label {
+                objectName: "conflictNotice"
+                visible: screen.conflicted
+                color: Theme.failed
+                text: qsTr("Resolve each conflict before saving: keep the text you want between <<<<<<< published and >>>>>>> review, then delete the three marker lines.")
+                Accessible.role: Accessible.AlertMessage
+            },
+            Label {
+                visible: editor.assetError !== ""
+                color: Theme.failed
+                text: Messages.assetFailure(editor.assetError)
+                Accessible.role: Accessible.AlertMessage
+            },
+            Standing {}
+        ]
+
+        commands: [
+            SegmentedSwitch {
+                objectName: "editMode"
+                readonly property string unrendered: screen.view.kind === "markdown" ? "" : qsTr("Only Markdown documents are rendered.")
+                options: [screen.modeOption("write-mode", ""), screen.modeOption("preview-mode", unrendered),
+                          screen.modeOption("split-mode", unrendered !== "" ? unrendered : screen.narrow ? qsTr("Split needs a wider window.") : "")]
+                current: screen.editMode
+                showLabel: !editPage.compact
+                Accessible.name: qsTr("Mode")
+                onPicked: function (value) { Session.runCommand(value + "-mode") }
+            },
+            BarRule {},
+            CommandButton {
+                id: insertImage
+                commandId: "insert-image"
+                showLabel: !editPage.compact
+                usable: insertImage.command.usable && screen.editMode !== "preview"
+                reason: screen.view.kind !== "markdown" ? qsTr("Only Markdown documents take images.")
+                      : screen.editMode === "preview" ? qsTr("Go back to the text to insert an image.") : ""
+            },
+            CommandButton {
+                commandId: "discard-changes"
+                text: qsTr("Discard")
+                showLabel: !editPage.compact
+            },
+            CommandButton {
+                id: save
+                commandId: "save-document"
+                primary: true
+                text: screen.proposing ? qsTr("Update review") : screen.managed ? qsTr("Propose change") : save.command.title
+                usable: save.command.usable && screen.dirty && !screen.conflicted && !Session.assets.uploading
+                reason: !screen.dirty ? qsTr("Nothing has changed.")
+                      : screen.conflicted ? qsTr("Resolve its conflicts first.")
+                      : Session.assets.uploading ? qsTr("Images are still uploading.") : ""
+            }
+        ]
+
+        // The text in the reading column, or in the left half beside the
+        // draft preview.
+        Item {
+            id: editBody
+            readonly property real half: (editBody.width - Theme.gapL) / 2
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Page {
+                id: editorPage
+                visible: screen.editMode !== "preview"
+                width: screen.splitting ? editBody.half : editBody.width
+                height: editBody.height
+                onContentYChanged: if (!screen.previewLeads) screen.followEditor()
                 MarkdownEditor {
                     id: editor
                     objectName: "documentEditor"
-                    visible: screen.view.kind !== "markdown" || screen.draftView === "write"
+                    Layout.maximumWidth: screen.splitting ? Number.POSITIVE_INFINITY : Theme.reading + 2 * editor.leftPadding
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredHeight: Math.max(editorPage.height, editor.implicitHeight)
                     images: screen.view.kind === "markdown"
                     documentId: screen.view.documentId
-                    folderId: screen.view.document.folder_id ?? ""
+                    folderId: screen.view.document.parent_id ?? ""
                     pinLinks: screen.control.pinsLinks
-                    font: screen.view.kind === "text" ? Theme.mono : Theme.body
-                    placeholderText: screen.view.title
+                    placeholderText: screen.view.kind === "markdown"
+                                     ? qsTr("Paste or drop images to store them in the space's assets folder. Type @ or / to link a file, # at a line's start for actions.")
+                                     : screen.view.title
                     Accessible.name: screen.view.title
                     enabled: !screen.view.busy && screen.view.editable
+                    onTextChanged: if (screen.editMode !== "write") redraft.restart()
                     onDraftDropped: function (file) {
                         const text = screen.view.readDraft(file)
                         if (text !== "")
@@ -475,146 +662,84 @@ FocusScope {
                     }
                 }
             }
+            Rectangle {
+                visible: screen.splitting
+                x: editBody.half + Theme.gapL / 2
+                width: 1
+                height: editBody.height
+                color: Theme.border
+            }
+            MarkdownView {
+                id: draft
+                objectName: "draftPreview"
+                visible: screen.editMode === "preview" || screen.splitting
+                x: screen.splitting ? editBody.half + Theme.gapL : 0
+                width: screen.splitting ? editBody.half : editBody.width
+                height: editBody.height
+                opensLinks: false
+                markdown: draft.visible ? screen.draftText : ""
+                via: screen.view.version.id ?? ""
+                touch: screen.touch
+                Accessible.name: qsTr("Preview")
 
-            Page {
-                visible: screen.view.tab === "versions"
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                CursorList {
-                    id: versions
-                    objectName: "versionList"
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: versions.contentHeight
-                    interactive: false
-                    activeFocusOnTab: true
-                    spacing: Theme.gapS
-                    rowHeight: screen.touch ? Theme.rowTouch : Theme.controlM
-                    model: screen.view.versions
-                    Accessible.role: Accessible.List
-                    Accessible.name: qsTr("Versions")
-                    delegate: ListRow {
-                        id: row
-                        required property var modelData
-                        required property int index
-                        objectName: "version_" + row.modelData.version_number
-                        view: versions
-                        touch: screen.touch
-                        cursor: versions.currentIndex === row.index
-                        selected: screen.view.version.id === row.modelData.id
-                        title: qsTr("Version %1").arg(row.modelData.version_number) + (row.modelData.current ? " · " + qsTr("Current") : "")
-                        detail: [row.modelData.published_at ? new Date(row.modelData.published_at).toLocaleString(Qt.locale(), Locale.ShortFormat) : "",
-                                 row.modelData.filename ?? "", Messages.usageAmount(row.modelData.byte_size, "storage_bytes")]
-                                .filter(function (part) { return part !== "" }).join(" · ")
-                        onClicked: {
-                            versions.currentIndex = row.index
-                            screen.view.selectVersion(row.modelData.id)
-                        }
-                        onActivated: {
-                            screen.view.selectVersion(row.modelData.id)
-                            Session.runCommand("view-tab")
-                        }
-                    }
+                HoverHandler { id: draftHover }
+            }
+            Connections {
+                target: draft.list
+                function onContentYChanged() {
+                    if (screen.splitting && screen.previewLeads)
+                        screen.showEditorLine(draft.topLine())
                 }
             }
+            // The draft preview follows the text a moment after typing stops.
+            Timer {
+                id: redraft
+                interval: 250
+                onTriggered: {
+                    screen.draftText = editor.text
+                    Qt.callLater(screen.followEditor)
+                }
+            }
+        }
+    }
 
-            Page {
-                objectName: "relatedPage"
-                visible: screen.view.tab === "related"
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: Theme.gapL
-                EmptyState {
-                    objectName: "relatedEmpty"
-                    visible: screen.unrelated
-                    Layout.fillWidth: true
-                    Layout.topMargin: Theme.gapXl
-                    text: qsTr("No other document links this one, and it links none.")
-                }
-                Repeater {
-                    model: ["incoming", "outgoing"]
-                    delegate: ColumnLayout {
-                        id: side
-                        required property string modelData
-                        readonly property bool incoming: side.modelData === "incoming"
-                        readonly property var rows: (side.incoming ? screen.view.incoming : screen.view.outgoing)
-                                                    .map(function (item) { return screen.relatedRow(item, side.incoming) })
-                        visible: screen.view.relatedLoaded && !screen.unrelated
-                        Layout.fillWidth: true
-                        spacing: Theme.gapM
-                        SectionHead {
-                            title: side.incoming ? qsTr("Linked from") : qsTr("Links to")
-                            ActionButton {
-                                objectName: side.modelData + "MoreButton"
-                                visible: side.incoming ? screen.view.incomingMore : screen.view.outgoingMore
-                                text: qsTr("Show more")
-                                icon: "new"
-                                usable: !screen.view.busy
-                                onActivated: screen.view.loadMoreRelated(side.modelData)
-                            }
-                        }
-                        Label {
-                            visible: side.rows.length === 0
-                            text: side.incoming ? qsTr("No document you can open links this one.")
-                                                : qsTr("The current version links no files.")
-                        }
-                        CursorList {
-                            id: related
-                            objectName: side.modelData + "List"
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: related.contentHeight
-                            interactive: false
-                            activeFocusOnTab: true
-                            spacing: Theme.gapS
-                            rowHeight: screen.touch ? Theme.rowTouch : Theme.controlM
-                            model: side.rows
-                            Accessible.role: Accessible.List
-                            Accessible.name: side.incoming ? qsTr("Linked from") : qsTr("Links to")
-                            onMoved: screen.relatedPick = side.rows[related.currentIndex]?.id ?? ""
-                            delegate: ListRow {
-                                id: link
-                                required property var modelData
-                                required property int index
-                                objectName: side.modelData + "_" + link.index
-                                view: related
-                                touch: screen.touch
-                                cursor: related.currentIndex === link.index
-                                selected: link.modelData.openable && screen.relatedPick === link.modelData.id
-                                opacity: link.modelData.openable ? 1 : 0.6
-                                title: link.modelData.title
-                                detail: link.modelData.detail
-                                onClicked: {
-                                    related.currentIndex = link.index
-                                    screen.relatedPick = link.modelData.id
-                                }
-                                onActivated: if (link.modelData.openable)
-                                    Session.openEntry("document", link.modelData.id)
-                            }
-                        }
-                        Label {
-                            objectName: "relatedHidden"
-                            visible: side.incoming && screen.view.hiddenCount > 0
-                            text: qsTr("%n more document(s) you cannot open link this one.", "", screen.view.hiddenCount)
-                        }
-                    }
-                }
-            }
+    ReviewPage {
+        id: reviewPage
+        objectName: "reviewPage"
+        visible: screen.inReview && !screen.editing
+        anchors.fill: page
+        narrow: screen.narrow
+        touch: screen.touch
+    }
 
-            Page {
-                visible: screen.view.tab === "reviews" && !screen.inReview
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                ReviewList {
-                    id: reviewList
-                    Layout.fillWidth: true
-                    touch: screen.touch
-                }
-            }
-            Page {
-                visible: screen.inReview
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                ReviewPage { Layout.fillWidth: true }
-            }
+    DetailPage {
+        id: comparePage
+        objectName: "comparePage"
+        visible: screen.comparing
+        anchors.fill: page
+        name: "compare"
+        narrow: screen.narrow
+        backText: screen.view.title
+        title: qsTr("Version %1 → version %2").arg(screen.view.comparison.from?.version_number ?? "")
+                                               .arg(screen.view.comparison.to?.version_number ?? "")
+        subject: (screen.view.comparison.from?.id ?? "") + (screen.view.comparison.to?.id ?? "")
+        start: "changes"
+        onBackRequested: screen.view.stopComparing()
+        Keys.onPressed: function (event) { event.accepted = compareChanges.handleKey(event) }
+
+        notes: [
+            Standing {}
+        ]
+
+        ChangesTab {
+            id: compareChanges
+            name: "compare"
+            before: screen.view.comparison.before ?? ""
+            after: screen.view.comparison.after ?? ""
+            beforeVia: screen.view.comparison.from?.id ?? ""
+            afterVia: screen.view.comparison.to?.id ?? ""
+            loaded: screen.view.comparison.loaded === true
+            touch: screen.touch
         }
     }
 
@@ -625,61 +750,101 @@ FocusScope {
         onClosed: if (screen.visible && !(panel.returnTo && panel.returnTo.visible)) screen.focusDefault()
     }
     Component {
+        id: detailsPanel
+        PanelBody {
+            objectName: "documentDetailsPanel"
+            title: qsTr("Details")
+            subtitle: screen.view.title
+            cancelText: qsTr("Close")
+            Facts {
+                facts: [{ name: "documentAuthor", label: qsTr("Author"),
+                          value: screen.personName(screen.view.versions[screen.view.versions.length - 1]?.published_by_membership_id) },
+                        { name: "documentVersions", label: qsTr("Versions"), value: String(screen.view.versions.length) },
+                        { name: "documentTags", label: qsTr("Tags"),
+                          value: (screen.view.document.document?.tag_assignments ?? []).map(function (tag) { return tag.name }).join(", ") },
+                        { name: "documentPath", label: qsTr("Path"), value: screen.view.place.concat([screen.view.title]).join(" › ") }]
+            }
+        }
+    }
+    Component {
         id: askPanel
         ConfirmPanel {
             id: asking
             readonly property string action: screen.pendingAction
-            readonly property bool saving: asking.action === "save"
-            readonly property bool review: asking.saving && screen.managed
-            readonly property bool decision: ["approve", "reject", "cancel"].includes(asking.action)
+            readonly property bool saving: ["propose", "update", "leave"].includes(asking.action)
+            // What a save proposes: a change to review, or a review's update.
+            readonly property string proposal: asking.action === "update" || (asking.action === "leave" && screen.proposing) ? "update"
+                                             : asking.action === "propose" || (asking.action === "leave" && screen.managed) ? "propose" : ""
             objectName: "documentAskPanel"
-            title: asking.saving && screen.proposing ? qsTr("Update this review?")
-                   : asking.saving ? (asking.review ? qsTr("Submit your changes for review?") : qsTr("Save a new version?"))
+            title: asking.action === "propose" ? qsTr("Propose change")
+                   : asking.action === "update" ? qsTr("Update this review?")
+                   : asking.action === "leave" ? qsTr("Unsaved changes")
                    : asking.action === "approve" ? qsTr("Approve this proposal?")
                    : asking.action === "reject" ? qsTr("Reject this proposal?")
                    : asking.action === "cancel" ? qsTr("Cancel this review?")
-                   : asking.action === "unmanage" ? qsTr("Stop managing this document?")
-                   : qsTr("Discard your changes?")
-            detail: asking.saving && screen.proposing ? qsTr("The edited text becomes the review's proposal, based on the published version. The review keeps its summary.")
-                    : asking.saving ? (asking.review ? qsTr("Reviewers see the edited document and its changes. The published version stays available until approval.")
-                                                     : qsTr("The edited text becomes the document's current version. Earlier versions stay under Versions."))
-                    : asking.action === "approve" ? qsTr("Once enough reviewers approve it, the proposal shown in this review becomes the published version.")
+                   : qsTr("Stop managing this document?")
+            detail: asking.action === "approve" ? qsTr("Once enough reviewers approve it, the proposal shown in this review becomes the published version.")
                     : asking.action === "unmanage" ? qsTr("Open reviews will be cancelled. New versions will no longer wait for approval.")
-                    : asking.action === "reject" || asking.action === "cancel" ? qsTr("The published version will remain unchanged.")
-                    : qsTr("The editor returns to the current version.")
-            reasonLabel: asking.saving && screen.proposing ? qsTr("What changed")
-                         : asking.saving ? (asking.review ? qsTr("Summary of the change") : qsTr("Describe the change (optional)"))
+                    : asking.action === "reject" || asking.action === "cancel" ? qsTr("The published version will remain unchanged.") : ""
+            reasonLabel: asking.proposal === "update" ? qsTr("What changed")
+                         : asking.proposal === "propose" ? qsTr("Comment")
                          : asking.action === "approve" || asking.action === "reject" ? qsTr("Decision comment (optional)")
                          : asking.action === "unmanage" ? qsTr("Reason for no longer managing it") : ""
-            reasonRequired: (asking.saving && (screen.proposing || asking.review)) || asking.action === "unmanage"
+            reasonRequired: asking.action !== "approve" && asking.action !== "reject"
             reasonLength: asking.action === "approve" || asking.action === "reject" ? 2000 : 500
-            saveText: asking.saving && screen.proposing ? qsTr("Update review")
-                      : asking.saving ? (asking.review ? qsTr("Submit for review") : qsTr("Save"))
+            saveText: asking.proposal === "update" ? qsTr("Update review")
+                      : asking.proposal === "propose" ? qsTr("Propose change")
+                      : asking.saving ? qsTr("Save")
                       : asking.action === "approve" ? qsTr("Approve")
                       : asking.action === "reject" ? qsTr("Reject")
-                      : asking.action === "cancel" ? qsTr("Cancel review")
-                      : asking.action === "unmanage" ? qsTr("Stop managing")
-                      : asking.action === "close" ? qsTr("Discard and close") : qsTr("Discard")
+                      : asking.action === "cancel" ? qsTr("Cancel review") : qsTr("Stop managing")
+            otherText: asking.action === "leave" ? qsTr("Discard") : ""
+            cancelText: asking.action === "leave" ? qsTr("Continue editing") : qsTr("Cancel")
             busy: asking.saving ? screen.view.busy : screen.control.busy
             failure: asking.saving ? screen.refusal(screen.view.errorCode, "document.new_version")
                      : asking.action === "unmanage" ? screen.refusal(screen.control.errorCode, "addon.controlled_docs.document_manage")
                      : asking.action === "approve" || asking.action === "reject"
                        ? screen.refusal(screen.control.errorCode, "addon.controlled_docs.approve")
-                     : asking.decision ? Messages.controlledFailure(screen.control.errorCode) : ""
+                     : Messages.controlledFailure(screen.control.errorCode)
             onConfirmed: {
-                if (asking.saving) {
+                if (asking.saving)
                     screen.view.save(editor.text, asking.reason, !screen.control.pinsLinks, screen.control.proposal())
-                } else if (asking.action === "discard") {
-                    editor.text = screen.view.text
-                    screen.control.clearProposal()
-                } else if (asking.action === "close") {
-                    screen.view.close()
-                } else if (asking.action === "unmanage") {
+                else if (asking.action === "unmanage")
                     screen.control.setControlled(false, asking.reason)
-                } else {
+                else
                     screen.control.decide(asking.action, asking.reason)
-                }
+            }
+            onOtherRequested: {
+                asking.finished()
+                screen.finishLeaving()
             }
         }
+    }
+
+    // How the document stands: what failed, what was saved, what is under way.
+    component Standing: ColumnLayout {
+        Layout.fillWidth: true
+        spacing: Theme.gapXs
+        Label {
+            objectName: "documentError"
+            visible: screen.view.errorCode !== ""
+            color: Theme.failed
+            text: screen.refusal(screen.view.errorCode, "document.new_version")
+            Accessible.role: Accessible.AlertMessage
+        }
+        Label {
+            objectName: "controlError"
+            visible: screen.control.active && screen.control.errorCode !== ""
+            color: Theme.failed
+            text: screen.managed ? Messages.controlledFailure(screen.control.errorCode)
+                                 : screen.refusal(screen.control.errorCode, "addon.controlled_docs.document_manage")
+            Accessible.role: Accessible.AlertMessage
+        }
+        Notice {
+            code: screen.view.notice !== "" ? screen.view.notice : screen.control.active ? screen.control.notice : ""
+            place: screen.view.documentId + ":" + screen.view.tab
+            text: Messages.documentNotice(code)
+        }
+        Label { visible: screen.view.busy; text: qsTr("Working…") }
     }
 }

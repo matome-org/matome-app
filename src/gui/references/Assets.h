@@ -48,9 +48,9 @@ public:
     Q_INVOKABLE void uploadUrls(const QList<QUrl> &urls);
     /// Opens the platform's picker for images to upload.
     Q_INVOKABLE void pickImages();
-    /// Looks up the open space's documents whose title holds `text`, to link
+    /// Looks up the open space's documents whose name holds `text`, to link
     /// from the document `excludeId` in `folderId`: its folder's files come
-    /// first, then titles that start with `text`. `found` answers.
+    /// first, then names that start with `text`. `found` answers.
     Q_INVOKABLE void search(const QString &text, const QString &folderId, const QString &excludeId);
     /// Finds the document of the open space at a path link's `link`;
     /// `resolved` answers.
@@ -63,11 +63,12 @@ public:
     /// `POST /uploads` declares them: `matome:` links by document (and
     /// version), `/` links by path unless `paths` is false.
     static QJsonArray references(const QString &markdown, bool paths = true);
-    /// `markdown` ready for a TextEdit: pinned images come from the image
-    /// provider no wider than `width`, signed through `viaVersionId`; other
-    /// remote images become a line naming them unless `external`.
-    Q_INVOKABLE QString render(const QString &markdown, const QString &orgId, const QString &spaceId,
-                               const QString &viaVersionId, int width, bool external) const;
+    /// Where an image Markdown links at `link` loads from: a file of the
+    /// space through the image provider, no wider than `width` and signed
+    /// through `viaVersionId`; another site's address only when `external`;
+    /// empty for any other link.
+    Q_INVOKABLE static QString imageSource(const QString &link, const QString &orgId, const QString &spaceId,
+                                           const QString &viaVersionId, int width, bool external);
     /// The Markdown that links a file of the space: an embedded `image`
     /// pinned at `versionId`, or a link to a document, pinned when
     /// `versionId` is set and following its current version otherwise.
@@ -83,8 +84,6 @@ public:
     /// Where the reference at `index` of references(markdown, paths) is
     /// linked first: `{start, length}` of its link, empty when there is none.
     Q_INVOKABLE QVariantMap referenceAt(const QString &markdown, int index, bool paths = true) const;
-    /// Whether `markdown` links an image that render() would block.
-    Q_INVOKABLE bool linksExternal(const QString &markdown) const;
 
 signals:
     void changed();
@@ -93,9 +92,9 @@ signals:
     /// The image is stored: `markdown` embeds it where the placeholder was.
     void uploaded(const QString &token, const QString &markdown);
     void failed(const QString &token, const QString &code);
-    /// The files matching `text`, each `{documentId, versionId, title,
-    /// place, path, image}`; `place` names its folder path, `path` is the
-    /// file's own from the space root.
+    /// The files matching `text`, each `{documentId, versionId, name,
+    /// folderId, place, path, image}`; `place` names its folder path, `path`
+    /// is the file's own from the space root.
     void found(const QString &text, const QVariantList &files);
     /// The document at `link`, empty when the space has none there.
     void resolved(const QString &link, const QString &documentId);

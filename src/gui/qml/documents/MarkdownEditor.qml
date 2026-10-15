@@ -5,14 +5,15 @@ import QtQuick.Controls.Basic as C
 import QtQuick.Layouts
 import matome
 
-// A plain text editor for Markdown and text documents. Tab leaves it; the
-// window's keys (Ctrl+S, Ctrl+Enter) still reach it. With `images`, a pasted,
-// dropped, or picked image uploads to the space's assets folder: a
-// placeholder marks the cursor until the link replaces it. A dropped .md
-// file is reported instead (`draftDropped`). With `images` too, "@" or "/"
-// after a space or at a line's start suggests the space's files by name:
-// picking one after "@" links it by id, after "/" by its path. "#" at a
-// line's start suggests commands.
+// A plain text editor for Markdown and text documents, in the fixed font
+// with spaced lines. Tab leaves it; the window's keys (Ctrl+S, Ctrl+Enter,
+// Ctrl+1 to 3) still reach it. With `images`, a pasted, dropped, or picked
+// image uploads to the space's assets folder: a placeholder marks the
+// cursor until the link replaces it. A dropped .md file is reported instead
+// (`draftDropped`). With `images` too, "@" or "/" after a space or at a
+// line's start suggests the space's files by name: picking one after "@"
+// links it by id, after "/" by its path. "#" at a line's start suggests
+// commands.
 C.TextArea {
     id: editor
 
@@ -89,8 +90,8 @@ C.TextArea {
             return
         }
         const file = editor.files[index]
-        editor.replaceTrigger(editor.trigger === "/" ? Session.assets.pathLink(file.title, file.path)
-                                                     : Session.assets.markdownLink(file.title, file.documentId,
+        editor.replaceTrigger(editor.trigger === "/" ? Session.assets.pathLink(file.name, file.path)
+                                                     : Session.assets.markdownLink(file.name, file.documentId,
                                                                                    file.image || editor.pinLinks ? file.versionId : "",
                                                                                    file.image))
     }
@@ -109,8 +110,8 @@ C.TextArea {
     }
 
     Layout.fillWidth: true
-    Layout.preferredHeight: Math.max(10 * Theme.controlL, editor.implicitHeight)
-    font: Theme.body
+    font: Theme.editor
+    padding: Theme.gapL
     color: Theme.textPrimary
     placeholderTextColor: Theme.textMuted
     selectionColor: Theme.accentSoft
@@ -170,6 +171,11 @@ C.TextArea {
         }
     }
 
+    LineSpacing {
+        document: editor.textDocument
+        height: 160
+    }
+
     Timer {
         id: searching
         interval: 150
@@ -196,7 +202,7 @@ C.TextArea {
         keeper: editor
         rows: editor.trigger === "#" ? editor.commands
                                      : editor.files.map(function (file) {
-                                           return { title: file.title, detail: editor.trigger === "/" ? file.path : file.place,
+                                           return { title: file.name, detail: editor.trigger === "/" ? file.path : file.place,
                                                     icon: file.image ? "image" : "document" }
                                        })
         emptyText: editor.trigger === "#" ? qsTr("No command matches.")
