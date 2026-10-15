@@ -2701,7 +2701,7 @@
         <translation>Tentativas demais. Aguarde um momento e tente de novo.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>This organization has reached its plan’s space limit.</source>
         <translation>Esta organização atingiu o limite de espaços do plano.</translation>
     </message>
@@ -2756,6 +2756,11 @@
         <translation>Não foi possível enviar “%1”: algo aqui já tem esse nome.</translation>
     </message>
     <message>
+        <location line="+2"/>
+        <source>Could not upload “%1”: this space is closed.</source>
+        <translation>Não foi possível enviar “%1”: este espaço está fechado.</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>Could not upload “%1”: Core refused it.</source>
         <translation>Não foi possível enviar “%1”: o Core recusou.</translation>
@@ -2774,6 +2779,11 @@
         <location line="+1"/>
         <source>This space is closed.</source>
         <translation>Este espaço está fechado.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This changed in the meantime. Refresh and try again.</source>
+        <translation>Isto mudou enquanto isso. Atualize e tente de novo.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4206,7 +4216,7 @@
         <translation>Espaços</translation>
     </message>
     <message>
-        <location line="-630"/>
+        <location line="-635"/>
         <source>You no longer have access here. Ask someone who manages it.</source>
         <translation>Você não tem mais acesso aqui. Peça a quem gerencia.</translation>
     </message>
@@ -4216,7 +4226,7 @@
         <translation>Isto não está mais disponível para você. Volte e atualize.</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+77"/>
         <source>That is no longer available. Refresh and try again.</source>
         <translation>Isso não está mais disponível. Atualize e tente novamente.</translation>
     </message>
@@ -4544,12 +4554,12 @@
         <translation>Esta revisão não se baseia na versão publicada. O autor precisa atualizá-la antes que possa ser aprovada.</translation>
     </message>
     <message>
-        <location line="-791"/>
+        <location line="-796"/>
         <source>That email, username, or password is wrong.</source>
         <translation>E-mail, nome de usuário ou senha incorretos.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+144"/>
         <source>A chosen space or role is no longer available. Refresh and choose again.</source>
         <translation>Um espaço ou papel escolhido não está mais disponível. Atualize e escolha de novo.</translation>
     </message>

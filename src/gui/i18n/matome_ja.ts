@@ -2685,7 +2685,7 @@
         <translation>試行回数が多すぎます。しばらく待ってからもう一度お試しください。</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>This organization has reached its plan’s space limit.</source>
         <translation>この組織はプランのスペース上限に達しています。</translation>
     </message>
@@ -2740,6 +2740,11 @@
         <translation>「%1」をアップロードできませんでした。ここにはすでに同じ名前のものがあります。</translation>
     </message>
     <message>
+        <location line="+2"/>
+        <source>Could not upload “%1”: this space is closed.</source>
+        <translation>「%1」をアップロードできませんでした。このスペースは閉じられています。</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>Could not upload “%1”: Core refused it.</source>
         <translation>「%1」をアップロードできませんでした。Core に拒否されました。</translation>
@@ -2758,6 +2763,11 @@
         <location line="+1"/>
         <source>This space is closed.</source>
         <translation>このスペースは閉じられています。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This changed in the meantime. Refresh and try again.</source>
+        <translation>その間に変更されました。更新してからもう一度お試しください。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4186,7 +4196,7 @@
         <translation>スペース</translation>
     </message>
     <message>
-        <location line="-630"/>
+        <location line="-635"/>
         <source>You no longer have access here. Ask someone who manages it.</source>
         <translation>ここへのアクセス権がなくなりました。管理者に依頼してください。</translation>
     </message>
@@ -4196,7 +4206,7 @@
         <translation>これは利用できなくなりました。戻って更新してください。</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+77"/>
         <source>That is no longer available. Refresh and try again.</source>
         <translation>それは利用できなくなりました。更新して再試行してください。</translation>
     </message>
@@ -4523,12 +4533,12 @@
         <translation>このレビューは公開版に基づいていません。承認するには作成者による更新が必要です。</translation>
     </message>
     <message>
-        <location line="-791"/>
+        <location line="-796"/>
         <source>That email, username, or password is wrong.</source>
         <translation>メールアドレス、ユーザー名、またはパスワードが正しくありません。</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+144"/>
         <source>A chosen space or role is no longer available. Refresh and choose again.</source>
         <translation>選んだスペースまたは役割は利用できなくなりました。更新して選び直してください。</translation>
     </message>

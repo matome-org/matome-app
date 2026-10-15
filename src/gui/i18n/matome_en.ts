@@ -176,7 +176,7 @@
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+320"/>
+        <location line="+325"/>
         <source>Access given to them directly ends in %n place(s).</source>
         <translation>
             <numerusform>Access given to them directly ends in %n place.</numerusform>

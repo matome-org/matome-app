@@ -67,6 +67,8 @@ function failure(code, kind, details) {
         return qsTr("You no longer have access here. Ask someone who manages it.")
     if (code === "not_found")
         return qsTr("This is no longer available to you. Go back and refresh.")
+    if (code === "document_trashed" || code === "space_closed" || code === "invalid_transition")
+        return adminFailure(code)
     const words = perKind(kind)
     if (code === "unauthenticated")
         return words.unauthenticated
@@ -115,6 +117,8 @@ function uploadFailure(code, name, landed) {
         return qsTr("Could not upload “%1”: names cannot be “.” or “..”, or contain slashes, backslashes or control characters.").arg(name)
     if (code === "name_conflict")
         return qsTr("Could not upload “%1”: something here already has that name.").arg(name)
+    if (code === "space_closed")
+        return qsTr("Could not upload “%1”: this space is closed.").arg(name)
     return qsTr("Could not upload “%1”: Core refused it.").arg(name)
 }
 
@@ -126,6 +130,7 @@ function adminFailure(code) {
     case "organization_access_denied": return qsTr("You do not have permission for this action.")
     case "document_trashed": return qsTr("This document is in the trash.")
     case "space_closed": return qsTr("This space is closed.")
+    case "invalid_transition": return qsTr("This changed in the meantime. Refresh and try again.")
     case "invalid_email": return qsTr("Enter a valid email address.")
     case "invalid_request": return qsTr("Check the required fields.")
     case "last_owner": return qsTr("The organization must keep at least one owner.")
