@@ -44,15 +44,11 @@ public:
     /// `{id, name, revision, members}`, each member `{id, label}`.
     QVariantList groups() const;
     /// Every active role: `{id, key, name, origin, custom, actions,
-    /// assignable, placeOnly, appliesTo}`. `placeOnly` roles work only
-    /// granted on a space, folder, document, or tag: no built-in
-    /// organization role, they hold an action Core reads only from a grant on
-    /// the place (the catalog's `resource_grant`) and no organization action.
-    /// `assignable` roles may be given to a person or group across the
-    /// organization: the built-in organization roles, and the custom and
-    /// add-on roles but the place-only ones. `appliesTo` is "organization"
-    /// for the built-in organization roles and for others holding an
-    /// organization action by the catalog's axes, else "space".
+    /// assignable, grantable, placeOnly, appliesTo}`, the three flags read
+    /// from Core's `assignable`. `assignable` roles may be given to a person
+    /// or group across the organization; `grantable` roles on a space, item,
+    /// or tag. `placeOnly` roles are grantable but not assignable. `appliesTo`
+    /// is "organization" for an assignable role, else "space".
     QVariantList roles() const;
     /// The actions a custom role may carry: `{key, axis, area}`, from the
     /// organization's catalog as `Permissions` read it.
@@ -65,9 +61,9 @@ public:
     /// The `assignable` roles, as `roles` rows: the built-in organization
     /// roles in Core's order of reach, then the custom and add-on roles.
     QVariantList assignableRoles() const;
-    /// The roles a grant on a space, folder, document, or tag may carry, as
-    /// `roles` rows: the built-in space roles, atomic then broad, then the
-    /// add-on roles, then the custom roles.
+    /// The roles a grant on a space, item, or tag may carry, as `roles` rows:
+    /// the built-in space roles, atomic then broad, then the add-on roles,
+    /// then the custom roles.
     QVariantList grantableRoles() const;
 
     /// "user:<membership>", "group:<id>" or "role:<id>" as people read it.
@@ -85,8 +81,8 @@ public:
     /// role in grant order. `archived` holds the keys of archived roles,
     /// which Core lists only on tags, where they still grant.
     QVariantMap holding(const QJsonArray &grants) const;
-    /// The path of `leaf` below the space, folder, document, or tag `kind`
-    /// `id` of `orgId`, in `spaceId` unless a tag.
+    /// The path of `leaf` below the space, item, or tag `kind` `id` of
+    /// `orgId`, in `spaceId` unless a tag.
     static QString resourcePath(const QString &orgId, const QString &kind, const QString &spaceId, const QString &id,
                                 const QString &leaf);
     /// The field that names a principal of `kind` ("user", "group", or
@@ -131,9 +127,6 @@ signals:
 
 private:
     bool live(int generation) const { return active() && generation == m_generation; }
-    /// The catalog's rows by action key.
-    QHash<QString, QJsonObject> described() const;
-    static bool placeOnly(const QJsonObject &role, const QHash<QString, QJsonObject> &described);
     /// Whether the organization a change began in is still open.
     bool stillOpen(int opened) const { return active() && opened == m_opened; }
     void load();

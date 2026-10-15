@@ -11,12 +11,12 @@
 namespace matome {
 class Session;
 
-/// Who has access to one resource of the current organization: a space, a
-/// folder, a document, or a tag. Access is read and set as the roles each
-/// person or group holds there, a holder's roles replaced in one request. A
-/// folder or document also shows the access it inherits from its space and
-/// the folders above it, and may stop inheriting it. A tag grant lets its
-/// holders see documents with that tag.
+/// Who has access to one resource of the current organization: a space, an
+/// item (a folder or a document), or a tag. Access is read and set as the
+/// roles each person or group holds there, a holder's roles replaced in one
+/// request. An item also shows the access it inherits from its space and the
+/// folders above it, and may stop inheriting it. A tag grant lets its holders
+/// see documents with that tag.
 class AccessGrants : public QObject
 {
     Q_OBJECT
@@ -38,7 +38,7 @@ public:
     AccessGrants(Session &session, AccessDirectory &directory, PlaceNames &places, AddOnBackend &backend);
     bool active() const { return !m_kind.isEmpty(); }
     bool busy() const { return m_pending > 0 || m_checking > 0 || m_directory.busy(); }
-    /// "space", "folder", "document", or "tag".
+    /// "space", "item", or "tag".
     QString kind() const { return m_kind; }
     /// The space of what is open; empty for a tag.
     QString spaceId() const { return m_spaceId; }
@@ -48,17 +48,17 @@ public:
     /// `{principal, principalKind, principalName, principalKey}` and the
     /// roles they hold, as `AccessDirectory::holding`.
     QVariantList holders() const;
-    /// The access a folder or document inherits, one row per holder and
+    /// The access an item inherits, one row per holder and
     /// place it comes from, the space first, then the folders outermost
     /// first: a `holders` row with `{sourceKind, sourceId, sourceName,
     /// scope}`, `scope` "manage" for a grant above a break in inheritance,
     /// which only manages access here, else "full".
     QVariantList inherited() const;
-    /// How a space, folder, or document is reached, from Core's access
+    /// How a space or item is reached, from Core's access
     /// summary: `{visibility, inheritance, breakKind, breakName,
     /// openToMembers, openKind, openName}`. `inheritance` is the resource's
     /// own ("open", "restricted", or empty while it inherits); `break*` names
-    /// the deepest folder or document that stops inheriting, and `open*`
+    /// the deepest item that stops inheriting, and `open*`
     /// where every member except guests reads it from, while
     /// `openToMembers`. Empty for a tag.
     QVariantMap summary() const;
@@ -83,13 +83,13 @@ public:
     /// Gives each of `principals` the roles `roleIds` here beside those it
     /// holds, one request per principal that lacks one of them.
     Q_INVOKABLE void add(const QStringList &principals, const QStringList &roleIds);
-    /// Sets how the open folder or document inherits access: "inherit",
+    /// Sets how the open item inherits access: "inherit",
     /// "restricted" (only access given here and below), or "open" (every
     /// member except guests also reads it), from inheriting or between
     /// restricted and open. Core copies no grant.
     Q_INVOKABLE void setInheritance(const QString &inheritance);
     /// Reads the organization roles of the groups the member `membershipId`
-    /// is in and, on a document with tags, their own, which `explain` counts
+    /// is in and, on an item with tags, their own, which `explain` counts
     /// once they land.
     Q_INVOKABLE void check(const QString &membershipId);
     /// What the member `membershipId` may do here and why, from the access
@@ -113,7 +113,7 @@ signals:
 
 private:
     QString path(const QString &leaf) const;
-    void readTags(int generation);
+    void readItem(int generation);
     QVariantMap holder(const QString &principal, const QJsonArray &grants) const;
     QStringList heldRoles(const QString &principal) const;
     bool grantable(const QString &principal) const;
@@ -128,6 +128,8 @@ private:
     AddOnBackend &m_backend;
     QString m_orgId, m_kind, m_spaceId, m_targetId, m_name, m_errorCode, m_notice;
     int m_generation = 0, m_pending = 0, m_checking = 0;
+    /// The revision of the open item, as it last read it.
+    int m_revision = 0;
     /// The role ids each person or group holds across the organization, by
     /// principal, as `check` read them.
     QHash<QString, QStringList> m_principalRoles;

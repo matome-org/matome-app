@@ -11,13 +11,15 @@ class Session;
 /// The controlled-documents add-on on the open document. It attaches to the
 /// document screen when the document is already managed, or is Markdown in
 /// an organization where the add-on is installed or a space where the person
-/// holds its managing action, and adds nothing otherwise: whether the document is managed, its reviews, the one opened
-/// with its candidate and diff, the decisions on it, and managing or
-/// unmanaging the document. Core decides whether the document may be
-/// managed: the add-on active in the space and the action held there. Saving an edit of a managed document is the
-/// document screen's own upload, which Core turns into a review; each save
-/// opens its own. The author updates a review that fell behind a later
-/// publication, in one step or by resolving its conflicts in the editor.
+/// holds its managing action, and adds nothing otherwise. It holds whether
+/// the document is managed, its reviews, the one opened with its base and
+/// candidate texts, the decisions on it, and managing or unmanaging the
+/// document. Core decides whether the document may be managed: the add-on
+/// active in the space and the action held there. Saving an edit of a
+/// managed document is the document screen's own upload, which Core turns
+/// into a review; each save opens its own. The author updates a review that
+/// fell behind a later publication, in one step or by resolving its
+/// conflicts in the editor.
 class ControlledDocs : public QObject
 {
     Q_OBJECT
@@ -42,7 +44,7 @@ class ControlledDocs : public QObject
     Q_PROPERTY(QVariantMap review READ review NOTIFY changed)
     Q_PROPERTY(QVariantList reviews READ reviews NOTIFY changed)
     Q_PROPERTY(QVariantList members READ members NOTIFY changed)
-    Q_PROPERTY(QString diff READ diff NOTIFY changed)
+    Q_PROPERTY(QString base READ base NOTIFY changed)
     Q_PROPERTY(QString candidate READ candidate NOTIFY changed)
     Q_PROPERTY(QVariantMap diffReferences READ diffReferences NOTIFY changed)
 
@@ -89,7 +91,8 @@ public:
     QVariantList reviews() const { return m_reviews.toVariantList(); }
     /// The organization's members, each with the `label` that names them.
     QVariantList members() const;
-    QString diff() const { return m_diff; }
+    /// The opened review's base version's text and its candidate's.
+    QString base() const { return m_base; }
     QString candidate() const { return m_candidate; }
     /// The review's reference changes: `{added, removed, changed}`.
     QVariantMap diffReferences() const { return m_diffReferences.toVariantMap(); }
@@ -126,11 +129,14 @@ private:
     QVariant reviewSetting(const QString &key) const;
     void attach();
     void detach();
-    QString documentPath(const QString &suffix = {}) const;
+    QString documentPath(const QString &leaf = {}) const;
     QString reviewPath(const QString &suffix = {}) const;
     void load();
     /// One of load()'s replies arrived; the last runs what waited for it.
     void settle();
+    /// The review Open review opens: the one selected on the Reviews tab,
+    /// else the first open one.
+    QString reviewToOpen() const;
     void openReview();
     void closeReview();
     void loadReview();
@@ -153,7 +159,7 @@ private:
     /// The space's activation, read where this person may turn it on.
     QJsonObject m_rule, m_review, m_diffReferences;
     QJsonArray m_reviews, m_members;
-    QString m_errorCode, m_reviewsError, m_notice, m_diff, m_candidate;
+    QString m_errorCode, m_reviewsError, m_notice, m_base, m_candidate;
     QByteArray m_after;
 };
 }

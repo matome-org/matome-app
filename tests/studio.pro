@@ -29,7 +29,8 @@ SOURCES += \
     ../src/gui/ViewModel.cpp \
     ../src/gui/EntryModel.cpp \
     ../src/gui/FolderTreeModel.cpp \
-    ../src/gui/Theme.cpp
+    ../src/gui/Theme.cpp \
+    ../src/gui/documents/LineSpacing.cpp
 
 HEADERS += \
     FakeCore.h \
@@ -47,7 +48,8 @@ HEADERS += \
     ../src/gui/FolderTreeModel.h \
     ../src/gui/JsonList.h \
     ../src/gui/Languages.h \
-    ../src/gui/Theme.h
+    ../src/gui/Theme.h \
+    ../src/gui/documents/LineSpacing.h
 
 RESOURCES += ../src/gui/resources.qrc
 include($$PWD/../src/gui/i18n/i18n.pri)

@@ -21,9 +21,9 @@ VERSION = $$MATOME_APP_VERSION
 INCLUDEPATH += $$PWD/../core
 
 HEADERS += OrgBilling.h OrgAdmin.h Languages.h Theme.h Session.h OrgModel.h SpaceModel.h FolderModel.h DocumentModel.h ViewModel.h \
-           EntryModel.h FolderTreeModel.h JsonList.h
+           EntryModel.h FolderTreeModel.h JsonList.h documents/LineSpacing.h
 SOURCES += OrgBilling.cpp OrgAdmin.cpp main.cpp Theme.cpp Session.cpp SessionActions.cpp OrgModel.cpp SpaceModel.cpp FolderModel.cpp \
-           DocumentModel.cpp ViewModel.cpp EntryModel.cpp FolderTreeModel.cpp
+           DocumentModel.cpp ViewModel.cpp EntryModel.cpp FolderTreeModel.cpp documents/LineSpacing.cpp
 RESOURCES += resources.qrc
 include($$PWD/i18n/i18n.pri)
 include($$PWD/references/images.pri)

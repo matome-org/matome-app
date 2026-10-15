@@ -31,13 +31,21 @@ if ! adb devices | grep -E 'emulator-[0-9]+[[:space:]]+device' >/dev/null; then
   emulator_pid=$!
 fi
 
-adb wait-for-device
-# Up to three minutes for Android to finish booting.
-if ! timeout 180 bash -c \
-    'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 2; done'; then
-  echo "e2e-android: emulator did not finish booting" >&2
-  exit 1
-fi
+# Up to three minutes for Android to finish booting; an emulator this script
+# started that exits first fails the run with the end of its log.
+deadline=$((SECONDS + 180))
+until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do
+  if [ -n "$emulator_pid" ] && ! kill -0 "$emulator_pid" 2>/dev/null; then
+    echo "e2e-android: the emulator exited; end of /tmp/matome-emulator.log:" >&2
+    tail -n 5 /tmp/matome-emulator.log >&2
+    exit 1
+  fi
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "e2e-android: emulator did not finish booting" >&2
+    exit 1
+  fi
+  sleep 2
+done
 
 "$root/.scripts/android-install.sh" "$root/build-tests/android-app/bin/matome-studio.apk"
 

@@ -52,7 +52,7 @@ public:
     void readOrganizations();
     /// False only when the catalog of `spaceId` speaks for the space and
     /// refuses `action`. It speaks once it allows listing content there:
-    /// access held only on folders or documents leaves Core to decide.
+    /// access held only on items leaves Core to decide.
     bool spaceAllows(const QString &spaceId, const QString &action) const;
     /// True only when the catalog of `spaceId` speaks for the space and
     /// grants `action`.

@@ -20,7 +20,7 @@ installing or uninstalling the app.
 
 - Create an account, confirm your email, and sign in.
 - Browse organizations, spaces, folders, and documents.
-- Upload, download, move, rename, and delete files.
+- Upload, download, move, rename, and trash files, and restore them from the trash.
 
 ## Development
 

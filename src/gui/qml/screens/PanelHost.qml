@@ -24,10 +24,12 @@ SidePanel {
     subtitle: host.body?.subtitle ?? ""
     saveText: host.body?.saveText ?? ""
     saveUsable: host.body?.saveUsable ?? false
+    otherText: host.body?.otherText ?? ""
     cancelText: host.body?.cancelText ?? qsTr("Cancel")
     initialFocus: host.body?.initialFocus ?? null
     back: function () { return host.body ? host.body.back() : false }
     onSaveRequested: host.body?.saveRequested()
+    onOtherRequested: host.body?.otherRequested()
 
     Loader {
         id: editor

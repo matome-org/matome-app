@@ -12,7 +12,7 @@ class Session;
 
 /// What one person or group of the current organization holds, for their
 /// page in Settings: the organization roles given to them, the grants that
-/// reach them on spaces, folders, documents, and tags whose access the
+/// reach them on spaces, items, and tags whose access the
 /// signed-in person may read, and the places a member reads through their
 /// organization roles. It sets their organization roles, grants them roles
 /// on a place, and takes back what was given to them.
@@ -41,7 +41,7 @@ public:
     /// spaceName, via, viaKind, viaName, viaKey, direct, idle}`. `kind` is
     /// "assignment" (an organization role, `placeKind` "organization",
     /// `idle` when the role is place-only and so does nothing there),
-    /// "grant" (a role on a space, folder, document, or tag), or "open" (a
+    /// "grant" (a role on a space, item, or tag), or "open" (a
     /// place a member reads through their organization roles, without a
     /// role or `via`); `id` is the assignment's or the grant's. `via` is the
     /// person, group, or role a grant names, `direct` when that is the
@@ -62,8 +62,8 @@ public:
     /// the missing ones first, so a member never passes through holding none,
     /// then takes back the others, and reads both lists again.
     Q_INVOKABLE void setRoles(const QStringList &roleIds);
-    /// Grants the principal `roleIds` on the space, folder, document, or tag
-    /// `kind` `id` (in `spaceId` unless a tag), beside what it holds there.
+    /// Grants the principal `roleIds` on the space, item, or tag `kind` `id`
+    /// (in `spaceId` unless a tag), beside what it holds there.
     Q_INVOKABLE void grant(const QString &kind, const QString &spaceId, const QString &id, const QStringList &roleIds);
     /// Takes back the rows `keys` name that were given to the principal
     /// itself: organization roles and grants.

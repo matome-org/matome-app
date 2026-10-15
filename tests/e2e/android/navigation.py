@@ -71,7 +71,10 @@ def create_by_fab(app: App) -> None:
     expect(screen.get("emptyState").label == "No spaces yet.\nCreate one to continue.", "Beta is not empty")
     expect(app.core.organization("Beta"), "Core has no Beta")
 
-    app.new("Plans", "New space")
+    app.choose("fabButton", "new", "New space")
+    app.form({"newSpaceName": "Plans"})
+    d.tap("sidePanelSave")
+    d.gone("sidePanel")
     place(app, "Plans", ["Beta", "Plans"], None, "Space · Beta")
     space = app.core.space("Plans")
     app.new("Specs", "New folder")

@@ -55,7 +55,7 @@ run = ".scripts/e2e-android.sh"
 
 [tasks."test:e2e"]
 description = "Desktop, web WASM, and Android APK e2e"
-run = ".scripts/e2e-desktop.sh && .scripts/e2e.sh && .scripts/e2e-android.sh"
+run = [".scripts/e2e-desktop.sh", ".scripts/e2e.sh", ".scripts/e2e-android.sh"]
 
 [tasks.verify]
 description = "Lints QML, checks every string is translated, then runs the tests"

@@ -8,12 +8,14 @@ import matome
 // Details, else one table), the commands that act on its selected rows
 // (`commands`), and the commands it adds to the item's own
 // (`pageCommands`). The page moves both rows into its command bar, and
-// shows `commands` only while the tab shows.
+// shows `commands` only while the tab shows. A tab not `available` is left
+// out of the row of tabs.
 ColumnLayout {
     id: tab
 
     required property string view
     required property string title
+    property bool available: true
     // Set by the page: whether the tab shows, and whether commands show
     // only their icons, their names as tips.
     property bool shown: false
@@ -25,6 +27,7 @@ ColumnLayout {
 
     visible: tab.shown
     Layout.fillWidth: true
+    Layout.fillHeight: true
     spacing: Theme.gapS
 
     RowLayout {

@@ -63,7 +63,7 @@ bool ControlledDocs::installed() const
 
 bool ControlledDocs::controlled() const
 {
-    return m_view.document().value(QStringLiteral("controlled_docs_enabled")).toBool();
+    return m_view.document().value(QStringLiteral("document")).toMap().value(QStringLiteral("controlled_docs_enabled")).toBool();
 }
 
 bool ControlledDocs::reviewing() const
@@ -172,9 +172,9 @@ void ControlledDocs::clearProposal()
     emit changed();
 }
 
-QString ControlledDocs::documentPath(const QString &suffix) const
+QString ControlledDocs::documentPath(const QString &leaf) const
 {
-    return contentPath(m_orgId, m_spaceId, QStringLiteral("documents/%1%2").arg(m_documentId, suffix));
+    return itemPath(m_orgId, m_documentId, leaf);
 }
 QString ControlledDocs::reviewPath(const QString &suffix) const
 {
@@ -210,7 +210,7 @@ void ControlledDocs::detach()
     m_rule = m_review = m_diffReferences = {};
     m_reviews = m_members = {};
     m_errorCode.clear(); m_reviewsError.clear(); m_notice.clear();
-    m_diff.clear(); m_candidate.clear();
+    m_base.clear(); m_candidate.clear();
     emit changed();
 }
 
@@ -219,7 +219,7 @@ bool ControlledDocs::allows(QByteArrayView id) const
     if (!m_active) return false;
     const bool idle = !busy();
     if (id == "open-review")
-        return idle && m_review.isEmpty() && !m_selectedId.isEmpty() && m_view.tab() == QLatin1String("reviews");
+        return idle && m_review.isEmpty() && !m_view.editing() && !reviewToOpen().isEmpty();
     if (id == "close-review") return !m_review.isEmpty();
     if (id == "download-candidate") return idle && !m_review.isEmpty();
     const bool open = m_review.value(QStringLiteral("status")).toString() == QLatin1String("open");
@@ -286,7 +286,7 @@ void ControlledDocs::load()
         m_rule = rule;
         settle();
     });
-    m_backend.list(documentPath(QStringLiteral("/reviews")), QStringLiteral("reviews"), live,
+    m_backend.list(documentPath(QStringLiteral("reviews")), QStringLiteral("reviews"), live,
             [this, live](const Client::Reply &reply, const QJsonArray &rows) {
         if (!live()) return;
         QList<QJsonObject> listed;
@@ -402,7 +402,7 @@ void ControlledDocs::resubmit(const QString &text, const QString &baseVersionId)
 {
     const QJsonObject version = QJsonObject::fromVariantMap(m_view.version());
     const QJsonObject descriptor{
-        {QStringLiteral("space_id"), m_spaceId}, {QStringLiteral("document_id"), m_documentId},
+        {QStringLiteral("space_id"), m_spaceId}, {QStringLiteral("item_id"), m_documentId},
         {QStringLiteral("filename"), version.value(QStringLiteral("filename"))},
         {QStringLiteral("content_type"), version.value(QStringLiteral("content_type"))},
         {QStringLiteral("reason"), m_review.value(QStringLiteral("reason"))},
@@ -428,7 +428,7 @@ void ControlledDocs::setControlled(bool enabled, const QString &reason)
     if (!m_active) return;
     if (!enabled && !validReason(reason)) { m_errorCode = QStringLiteral("reason_required"); emit changed(); return; }
     const QJsonObject body = enabled ? QJsonObject() : QJsonObject{{QStringLiteral("reason"), reason.trimmed()}};
-    mutation(enabled ? "PUT" : "DELETE", documentPath(QStringLiteral("/controlled-docs")), body,
+    mutation(enabled ? "PUT" : "DELETE", documentPath(QStringLiteral("controlled-docs")), body,
              m_view.document().value(QStringLiteral("revision")).toInt(),
              enabled ? QStringLiteral("control_enabled") : QStringLiteral("control_removed"));
 }
@@ -451,8 +451,21 @@ void ControlledDocs::selectReview(const QString &id)
     emit changed();
 }
 
+QString ControlledDocs::reviewToOpen() const
+{
+    if (m_view.tab() == QLatin1String("reviews"))
+        return m_selectedId;
+    for (const auto &value : std::as_const(m_reviews))
+        if (value.toObject().value(QStringLiteral("status")).toString() == QLatin1String("open"))
+            return value.toObject().value(QStringLiteral("id")).toString();
+    return {};
+}
+
+// A review opens on the Reviews tab, selected there.
 void ControlledDocs::openReview()
 {
+    m_selectedId = reviewToOpen();
+    m_view.setTab(QStringLiteral("reviews"));
     for (const auto &value : std::as_const(m_reviews))
         if (value.toObject().value(QStringLiteral("id")).toString() == m_selectedId) m_review = value.toObject();
     if (!m_review.isEmpty()) loadReview();
@@ -462,17 +475,18 @@ void ControlledDocs::closeReview()
 {
     ++m_reviewGeneration;
     m_review = m_diffReferences = {};
-    m_diff.clear();
+    m_base.clear();
     m_candidate.clear();
     m_errorCode.clear();
     m_reviewPending = 0;
     emit changed();
 }
 
-// The selected review's diff and its candidate Markdown, fetched together.
+// The selected review's reference changes, from Core's diff, and the
+// Markdown of its base version and of its candidate, fetched together.
 void ControlledDocs::loadReview()
 {
-    m_reviewPending = 2;
+    m_reviewPending = 3;
     m_errorCode.clear();
     const auto isLive = guard();
     const int reviewGeneration = m_reviewGeneration;
@@ -482,10 +496,15 @@ void ControlledDocs::loadReview()
         if (!current()) return;
         --m_reviewPending;
         const auto data = reply.json.value(QStringLiteral("data")).toObject();
-        if (reply.ok) {
-            m_diff = data.value(QStringLiteral("diff")).toString();
-            m_diffReferences = data.value(QStringLiteral("references")).toObject();
-        } else m_errorCode = failCode(reply);
+        if (reply.ok) m_diffReferences = data.value(QStringLiteral("references")).toObject();
+        else m_errorCode = failCode(reply);
+        emit changed();
+    });
+    m_view.readVersion(m_review.value(QStringLiteral("base_version_id")).toString(), current,
+                       [this](const QString &text, const QString &code) {
+        --m_reviewPending;
+        if (code.isEmpty()) m_base = text;
+        else m_errorCode = code;
         emit changed();
     });
     m_backend.request("GET", reviewPath(QStringLiteral("/candidate/download")), {}, {}, [this, current](const Client::Reply &reply) {

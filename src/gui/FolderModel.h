@@ -54,11 +54,14 @@ public:
     void open(const QString &folderId);
     void move(const QString &folderId, const QString &parentId, int revision);
     void rename(const QString &folderId, const QString &name, int revision);
-    void remove(const QString &folderId, int revision);
+    /// Moves the folder and everything in it to the trash, where Core holds it at its new revision.
+    void trash(const QString &folderId, int revision);
     void clear();
 
 signals:
     void changed();
+    /// Core moved `folderId` and what it holds to the trash, where it is at `revision`.
+    void trashed(const QString &folderId, int revision);
 
 private:
     QVector<FolderRow> visible() const;

@@ -594,6 +594,13 @@ QFont Theme::mono() const
     return made;
 }
 
+QFont Theme::editor() const
+{
+    QFont made = mono();
+    made.setPixelSize(15);
+    return made;
+}
+
 QFont Theme::button() const
 {
     QFont made = font(sans(), 14, QFont::Medium);
@@ -644,6 +651,13 @@ QFont Theme::strong(const QFont &font) const
 {
     QFont made = font;
     made.setWeight(QFont::Medium);
+    return made;
+}
+
+QFont Theme::sized(const QFont &font, int pixelSize) const
+{
+    QFont made = font;
+    made.setPixelSize(pixelSize);
     return made;
 }
 

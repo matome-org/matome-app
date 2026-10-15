@@ -198,9 +198,11 @@ void AddOnManager::resume(const QString &key)
 
 void AddOnManager::saveSettings(const QString &key, const QVariantMap &settings)
 {
-    if (settings.isEmpty() || product(key).value(QStringLiteral("installation")).toObject().isEmpty()) return;
+    const auto installation = product(key).value(QStringLiteral("installation")).toObject();
+    if (settings.isEmpty() || installation.isEmpty()) return;
     mutate("PATCH", key, {}, {{QStringLiteral("settings"), QJsonObject::fromVariantMap(settings)}},
-           idempotencyHeader(), QStringLiteral("settings_saved"));
+           idempotentMatchHeader(installation.value(QStringLiteral("revision")).toInt()),
+           QStringLiteral("settings_saved"));
 }
 
 void AddOnManager::assign(const QString &key, const QString &membershipId)
@@ -209,14 +211,17 @@ void AddOnManager::assign(const QString &key, const QString &membershipId)
     if (installation.isEmpty() || membershipId.isEmpty()
             || jsonId(installation.value(QStringLiteral("responsible_membership_id"))) == membershipId) return;
     mutate("PATCH", key, {}, {{QStringLiteral("responsible_membership_id"), membershipId}},
-           idempotencyHeader(), QStringLiteral("responsibility_saved"));
+           idempotentMatchHeader(installation.value(QStringLiteral("revision")).toInt()),
+           QStringLiteral("responsibility_saved"));
 }
 
 void AddOnManager::pause(const QString &key)
 {
-    if (product(key).value(QStringLiteral("installation")).toObject().value(QStringLiteral("status")).toString()
-            != QLatin1String("active")) return;
-    mutate("POST", key, QStringLiteral("/pause"), {}, idempotencyHeader(), QStringLiteral("installation_paused"));
+    const auto installation = product(key).value(QStringLiteral("installation")).toObject();
+    if (installation.value(QStringLiteral("status")).toString() != QLatin1String("active")) return;
+    mutate("PATCH", key, {}, {{QStringLiteral("status"), QStringLiteral("paused")}},
+           idempotentMatchHeader(installation.value(QStringLiteral("revision")).toInt()),
+           QStringLiteral("installation_paused"));
 }
 
 void AddOnManager::uninstall(const QString &key, const QString &reason)

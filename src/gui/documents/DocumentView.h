@@ -13,8 +13,9 @@ class Session;
 /// The document screen: one document of the open space, any type. Shows the
 /// selected published version (the current one by default) when its type
 /// has a preview, lists the versions and the documents it links or that link
-/// it, and saves an edited Markdown or text document as a new version.
-/// Add-ons extend it; it knows none of them.
+/// it, compares two of its versions, and edits a Markdown or text document
+/// in a mode of its own, whose save is the document's next version. Add-ons extend it; it knows none of
+/// them.
 class DocumentView : public QObject
 {
     Q_OBJECT
@@ -39,6 +40,8 @@ class DocumentView : public QObject
     Q_PROPERTY(bool incomingMore READ incomingMore NOTIFY changed)
     Q_PROPERTY(bool outgoingMore READ outgoingMore NOTIFY changed)
     Q_PROPERTY(QString tab READ tab WRITE setTab NOTIFY changed)
+    Q_PROPERTY(bool editing READ editing NOTIFY changed)
+    Q_PROPERTY(QVariantMap comparison READ comparison NOTIFY changed)
     Q_PROPERTY(QString errorCode READ errorCode NOTIFY changed)
     Q_PROPERTY(int errorIndex READ errorIndex NOTIFY changed)
     Q_PROPERTY(QString notice READ notice NOTIFY changed)
@@ -46,7 +49,7 @@ class DocumentView : public QObject
 public:
     DocumentView(Session &session, AddOnBackend &backend);
     bool active() const { return m_active; }
-    bool busy() const { return m_pending > 0; }
+    bool busy() const { return m_pending > 0 || m_comparePending > 0; }
     QString documentId() const { return m_documentId; }
     QString title() const;
     /// Where the document is: its space's name, then its folders.
@@ -75,6 +78,23 @@ public:
     bool outgoingMore() const { return !m_outgoingCursor.isEmpty(); }
     QString tab() const { return m_tab; }
     void setTab(const QString &tab);
+    /// Whether the editor holds the screen; it opens on the Preview tab.
+    bool editing() const { return m_editing; }
+    /// Leaves the editor for the Preview tab.
+    Q_INVOKABLE void stopEditing();
+    /// The two versions compared, `{from, to, before, after, loaded}`: the
+    /// earlier version and the later one, their texts, and whether both
+    /// have loaded; empty unless comparing.
+    QVariantMap comparison() const;
+    /// Compares the published versions `fromId` and `toId`, the earlier one
+    /// first whatever their order; an empty `toId` is the current version.
+    Q_INVOKABLE void compare(const QString &fromId, const QString &toId = {});
+    Q_INVOKABLE void stopComparing();
+    /// The text a version of the open document holds, through Core's
+    /// download link: `done(text, {})`, or `done({}, code)` when it cannot
+    /// be read or is not UTF-8. Nothing runs once `live` turns false.
+    using TextReady = std::function<void(const QString &text, const QString &errorCode)>;
+    void readVersion(const QString &versionId, const AddOnBackend::Live &live, const TextReady &done);
     QString errorCode() const { return m_errorCode; }
     int errorIndex() const { return m_errorIndex; }
     QString notice() const { return m_notice; }
@@ -108,12 +128,13 @@ signals:
     void textChanged();
     void opened(const QString &documentId);
     void closed();
-    /// A new version was published, or `reviewId` was opened for it.
+    /// A new version was published, or `reviewId` was opened for it; the
+    /// editor has closed.
     void saved(const QString &reviewId);
     void requested(const QString &id);
 
 private:
-    QString documentPath(const QString &suffix = {}) const;
+    QString documentPath(const QString &leaf = {}) const;
     bool live(int generation) const { return m_active && generation == m_generation; }
     void load();
     void loadText();
@@ -123,11 +144,14 @@ private:
 
     Session &m_session;
     AddOnBackend &m_backend;
-    bool m_active = false, m_textLoaded = false, m_relatedAsked = false, m_relatedLoaded = false;
+    bool m_active = false, m_textLoaded = false, m_relatedAsked = false, m_relatedLoaded = false, m_editing = false;
     int m_generation = 0, m_pending = 0, m_errorIndex = -1, m_hiddenCount = 0;
     QString m_orgId, m_spaceId, m_documentId, m_tab, m_text, m_errorCode, m_notice;
     QString m_incomingCursor, m_outgoingCursor;
-    QJsonObject m_document, m_version;
+    QJsonObject m_document, m_version, m_compareFrom, m_compareTo;
+    /// The compared versions' texts, null until each has loaded.
+    QString m_compareBefore, m_compareAfter;
+    int m_compareGeneration = 0, m_comparePending = 0;
     QJsonArray m_versions, m_incoming, m_outgoing;
     QStringList m_extraTabs;
 };

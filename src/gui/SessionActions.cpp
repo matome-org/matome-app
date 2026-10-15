@@ -37,7 +37,7 @@ void Session::renameFocused(const QString &name)
 QString Session::nameOf(const Entry &entry) const
 {
     return entry.kind == QLatin1String("folder") ? m_folders.nameOf(entry.id)
-                                                 : m_documents.titleOf(entry.id);
+                                                 : m_documents.nameOf(entry.id);
 }
 
 Session::Entry Session::focusedEntry() const
@@ -65,37 +65,41 @@ void Session::trashFocused()
     m_documents.trash(entry.id, entry.revision);
 }
 
-void Session::deleteFocusedFolder()
+void Session::trashFocusedFolder()
 {
     const auto [kind, id, revision] = parsePayload(m_focusPayload);
     if (kind == QLatin1String("folder"))
-        m_folders.remove(id, revision);
+        m_folders.trash(id, revision);
 }
 
-void Session::settleLastTrashed(const char *action, bool refills)
+void Session::settleLastTrashed(bool restores)
 {
     const QString orgId = currentOrgId();
     const auto [kind, id, revision] = m_lastTrashed;
     if (!m_signedIn || orgId.isEmpty() || id.isEmpty())
         return;
-    authedPost(orgPath(orgId, QStringLiteral("trash/%1/%2").arg(id, QLatin1String(action))),
-               {}, idempotentMatchHeader(revision), [this, refills](const Client::Reply &reply) {
-                   if (!reply.ok) {
-                       const QString code = failCode(reply);
-                       // Restored, purged, or changed elsewhere: no longer
-                       // the trash this would undo or finish.
-                       if (code == QLatin1String("revision_conflict"))
-                           m_lastTrashed = {};
-                       m_documents.refuse(code, reply.json.value(QStringLiteral("details")).toObject());
-                       return;
-                   }
-                   m_lastTrashed = {};
-                   if (refills) {
-                       m_folders.reload();
-                       m_documents.reload();
-                   }
-                   notify();
-               });
+    const auto settled = [this, restores](const Client::Reply &reply) {
+        if (!reply.ok) {
+            const QString code = failCode(reply);
+            // Restored, purged, or changed elsewhere: no longer
+            // the trash this would undo or finish.
+            if (code == QLatin1String("revision_conflict"))
+                m_lastTrashed = {};
+            m_documents.refuse(code, reply.json.value(QStringLiteral("details")).toObject());
+            return;
+        }
+        m_lastTrashed = {};
+        if (restores) {
+            m_folders.reload();
+            m_documents.reload();
+        }
+        notify();
+    };
+    const QString path = itemPath(orgId, id);
+    if (restores)
+        authedPatch(path, {{QStringLiteral("state"), QStringLiteral("active")}}, idempotentMatchHeader(revision), settled);
+    else
+        authedDelete(path, idempotentMatchHeader(revision), settled);
 }
 
 void Session::uploadUrls(const QList<QUrl> &urls)
@@ -208,15 +212,15 @@ void Session::startUpload()
     const QString name = next.name;
     const QByteArray bytes = next.bytes;
     const bool manage = next.manage;
-    QJsonObject document;
-    document.insert(QStringLiteral("title"), name);
+    QJsonObject item{{QStringLiteral("kind"), QStringLiteral("document")},
+                     {QStringLiteral("space_id"), spaceId},
+                     {QStringLiteral("name"), name}};
     if (!next.to.folderId.isEmpty())
-        document.insert(QStringLiteral("folder_id"), next.to.folderId);
-    authedPost(contentPath(orgId, spaceId, QStringLiteral("documents")), document,
-               idempotencyHeader(),
+        item.insert(QStringLiteral("parent_id"), next.to.folderId);
+    authedPost(itemsPath(orgId), item, idempotencyHeader(),
                live([this, to, orgId, spaceId, name, bytes, manage, run](const Client::Reply &reply) {
                    const QString documentId =
-                           jsonId(reply.json.value(QStringLiteral("document"))
+                           jsonId(reply.json.value(QStringLiteral("item"))
                                           .toObject()
                                           .value(QStringLiteral("id")));
                    if (!reply.ok || documentId.isEmpty()) {
@@ -225,7 +229,7 @@ void Session::startUpload()
                    }
                    QJsonObject upload;
                    upload.insert(QStringLiteral("space_id"), spaceId);
-                   upload.insert(QStringLiteral("document_id"), documentId);
+                   upload.insert(QStringLiteral("item_id"), documentId);
                    upload.insert(QStringLiteral("filename"), name);
                    upload.insert(QStringLiteral("content_type"), name.endsWith(QLatin1String(".md"), Qt::CaseInsensitive)
                                  ? QStringLiteral("text/markdown") : QStringLiteral("application/octet-stream"));
@@ -248,7 +252,7 @@ void Session::startUpload()
 void Session::manageUploaded(const Location &to, const QString &documentId)
 {
     const int run = m_uploadRun;
-    const QString path = contentPath(to.orgId, to.spaceId, QStringLiteral("documents/") + documentId);
+    const QString path = itemPath(to.orgId, documentId);
     AddOnBackend &backend = m_addOns.backend();
     backend.request("GET", path, {}, {}, [this, run, path, &backend](const Client::Reply &read) {
         if (run != m_uploadRun)
@@ -257,7 +261,7 @@ void Session::manageUploaded(const Location &to, const QString &documentId)
             finishUpload(failCode(read), true);
             return;
         }
-        const int revision = read.json.value(QStringLiteral("document")).toObject().value(QStringLiteral("revision")).toInt();
+        const int revision = read.json.value(QStringLiteral("item")).toObject().value(QStringLiteral("revision")).toInt();
         backend.request("PUT", path + QStringLiteral("/controlled-docs"), {}, idempotentMatchHeader(revision),
                         [this, run](const Client::Reply &reply) {
             if (run == m_uploadRun)
@@ -362,9 +366,9 @@ const QList<Session::Command> &Session::commands()
                  [](Session &s) { s.trashFocused(); }, nullptr,
                  [](const Session &s) { return onKind(s.focusedEntry().kind, "folder.delete", "document.trash"); }},
                 {"restore", QT_TR_NOOP("Restore last trash"),
-                 trashed, [](Session &s) { s.settleLastTrashed("restore", true); }},
+                 trashed, [](Session &s) { s.settleLastTrashed(true); }},
                 {"purge", QT_TR_NOOP("Purge last trash"),
-                 trashed, [](Session &s) { s.settleLastTrashed("purge", false); }},
+                 trashed, [](Session &s) { s.settleLastTrashed(false); }},
                 {"cut", QT_TR_NOOP("Cut"), focused, [](Session &s) { s.cutPayload(s.m_focusPayload); }, nullptr,
                  [](const Session &s) { return onKind(s.focusedEntry().kind, "folder.move", "document.move"); }},
                 {"paste", QT_TR_NOOP("Paste"),
@@ -384,11 +388,14 @@ const QList<Session::Command> &Session::commands()
             const char *icon;
         } viewing[] = {
                 {"view-tab", QT_TR_NOOP("Preview"), "document"},
-                {"edit-tab", QT_TR_NOOP("Edit"), "rename"},
                 {"versions-tab", QT_TR_NOOP("Versions"), "restore"},
                 {"related-tab", QT_TR_NOOP("Related"), "link"},
                 {"reviews-tab", QT_TR_NOOP("Reviews"), "controlled-docs"},
                 {"download-version", QT_TR_NOOP("Download"), "download"},
+                {"edit-document", QT_TR_NOOP("Edit"), "rename"},
+                {"write-mode", QT_TR_NOOP("Write"), "rename"},
+                {"preview-mode", QT_TR_NOOP("Preview"), "document"},
+                {"split-mode", QT_TR_NOOP("Split"), "split"},
                 {"insert-image", QT_TR_NOOP("Insert image"), "image"},
                 {"discard-changes", QT_TR_NOOP("Discard changes"), "restore"},
                 {"save-document", QT_TR_NOOP("Save"), "check"},
@@ -427,7 +434,7 @@ const QList<Session::Command> &Session::commands()
             const bool controlled = s.m_documents.controlledOf(entry.id);
             if (id == "unmanage-document") return controlled;
             return id == "manage-document" && !controlled
-                    && s.m_documents.titleOf(entry.id).endsWith(QLatin1String(".md"), Qt::CaseInsensitive);
+                    && s.m_documents.nameOf(entry.id).endsWith(QLatin1String(".md"), Qt::CaseInsensitive);
         };
         for (const auto &action : reviewing) {
             const QByteArray id(action.id);
@@ -498,10 +505,13 @@ const struct {
         {Qt::Key_D, 0, false, "download", "D"},
         {Qt::Key_D, 0, false, "download-version", "D"},
         {Qt::Key_1, 0, false, "view-tab", "1"},
-        {Qt::Key_2, 0, false, "edit-tab", "2"},
-        {Qt::Key_3, 0, false, "versions-tab", "3"},
-        {Qt::Key_4, 0, false, "related-tab", "4"},
-        {Qt::Key_5, 0, false, "reviews-tab", "5"},
+        {Qt::Key_2, 0, false, "versions-tab", "2"},
+        {Qt::Key_3, 0, false, "related-tab", "3"},
+        {Qt::Key_4, 0, false, "reviews-tab", "4"},
+        {Qt::Key_E, 0, false, "edit-document", "E"},
+        {Qt::Key_1, Qt::ControlModifier, true, "write-mode", "Ctrl+1"},
+        {Qt::Key_2, Qt::ControlModifier, true, "preview-mode", "Ctrl+2"},
+        {Qt::Key_3, Qt::ControlModifier, true, "split-mode", "Ctrl+3"},
         {Qt::Key_S, Qt::ControlModifier, true, "save-document", "Ctrl+S"},
         {Qt::Key_Return, Qt::ControlModifier, true, "save-document", "Ctrl+Enter"},
         {Qt::Key_Enter, Qt::ControlModifier, true, "save-document", ""},
@@ -553,11 +563,8 @@ Session::Face Session::faceOf(const Command &row) const
 {
     if (row.title)
         return {row.title, row.icon ? row.icon : row.id.constData()};
-    if (row.id == "trash") {
-        if (focusedEntry().kind == QLatin1String("folder"))
-            return {QT_TR_NOOP("Delete folder"), "purge"};
+    if (row.id == "trash")
         return {QT_TR_NOOP("Move to trash"), "trash"};
-    }
     return {levelInfo(where()).newTitle, row.id.constData()};
 }
 
@@ -603,7 +610,7 @@ void Session::openFocusedAccess()
     const Entry focused = focusedEntry();
     if (focused.id.isEmpty())
         return;
-    m_accessGrants.open(focused.kind, currentSpaceId(), focused.id, nameOf(focused));
+    m_accessGrants.open(QStringLiteral("item"), currentSpaceId(), focused.id, nameOf(focused));
     emit promptAccess();
 }
 

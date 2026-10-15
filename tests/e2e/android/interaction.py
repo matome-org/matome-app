@@ -8,8 +8,9 @@ import re
 from app import ACME, DARK, ORGS, App, scenario
 from device import PACKAGE, Screen, expect
 
-ROW_MENU = {"download": "Download", "rename": "Rename", "cut": "Cut", "trash": "Move to trash",
-            "new": "New folder", "upload": "Upload file", "refresh": "Refresh"}
+ROW_MENU = {"open": "Open", "download": "Download", "rename": "Rename", "access": "Manage access",
+            "cut": "Cut", "trash": "Move to trash", "new": "New folder", "upload": "Upload file",
+            "refresh": "Refresh"}
 
 
 @scenario("4.2", "4.3", title="a tap opens, a long press opens a menu that is picked by touch")
@@ -27,7 +28,7 @@ def tap_and_long_press(app: App) -> None:
     screen = app.long_menu(app.row("Docs"))
     items = app.menu_items(screen)
     expect(items == [i for i in ROW_MENU if i != "download"], f"a folder's menu offers {items}")
-    expect(screen.get("menu_trash").label == "Delete folder", "a folder's menu does not delete it for good")
+    expect(screen.get("menu_trash").label == ROW_MENU["trash"], "a folder's menu does not trash it")
     app.run_item(screen.get("menu_new"))
     app.name_it("Fresh")
     app.wait_rows(["Docs", "Fresh", "root.txt"])

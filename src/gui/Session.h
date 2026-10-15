@@ -158,8 +158,10 @@ public:
 
     /// Signed in, with an organization and one of its spaces open.
     bool inSpace() const;
-    /// `leaf` under the open space's content API.
-    QString spacePath(const QString &leaf) const;
+    /// The items of the open space that match `filter`, a query string such as "kind=folder".
+    QString spaceItemsPath(const QString &filter) const;
+    /// The `destination` of an item move: the open space and the folder `parentId` (the root when empty).
+    QJsonObject moveDestination(const QString &parentId) const;
 
     DocumentModel *documents() { return &m_documents; }
     QString currentDocumentId() const { return m_documents.currentDocumentId(); }
@@ -217,8 +219,8 @@ public:
     Q_INVOKABLE void dropPayload(const QString &folderId, const QString &payload);
     Q_INVOKABLE void setFocusPayload(const QString &payload);
     Q_INVOKABLE void renameFocused(const QString &name);
-    /// Deletes the focused folder for good; Core refuses one that holds anything.
-    Q_INVOKABLE void deleteFocusedFolder();
+    /// Moves the focused folder and what it holds to the trash.
+    Q_INVOKABLE void trashFocusedFolder();
     /// Reads each local file or Android content:// URI and uploads it.
     Q_INVOKABLE void uploadUrls(const QList<QUrl> &urls);
     /// The one upload entry point: queues a file into the open folder.
@@ -313,7 +315,7 @@ private:
         const char *icon;
     };
     /// A row's own title with its id as the icon; for a null title, "new"
-    /// names the level's entry, and "trash" deletes a focused folder for good.
+    /// names the level's entry.
     Face faceOf(const Command &row) const;
     /// Names of one level: its id, the kind of entry it lists, its "new".
     struct LevelInfo {
@@ -354,13 +356,13 @@ private:
     Entry focusedEntry() const;
     /// A folder's name or a document's title.
     QString nameOf(const Entry &entry) const;
-    /// Trashes the focused document, or asks before deleting the focused
-    /// folder, which has no trash.
+    /// Trashes the focused document, or asks before trashing the focused
+    /// folder with what it holds.
     void trashFocused();
-    /// Restores or purges (`action`) the last trashed document at the
-    /// revision Core trashed it at; a restore `refills` the open folder.
-    /// When Core holds it at another revision, it is forgotten.
-    void settleLastTrashed(const char *action, bool refills);
+    /// Restores (`restores`) or purges the last trashed entry at the revision
+    /// Core trashed it at; a restore refills the open folder. When Core holds
+    /// it at another revision, it is forgotten.
+    void settleLastTrashed(bool restores);
     void requestUpload();
     void startUpload();
     void setUploadError(const QString &code = QString(), const QString &name = QString(), bool landed = false);

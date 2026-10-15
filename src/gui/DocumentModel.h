@@ -16,8 +16,8 @@ class Session;
 
 struct DocumentRow {
     QString id;
-    QString folderId;
-    QString title;
+    QString parentId;
+    QString name;
     QString byteSize;
     int revision = 1;
     bool controlled = false;
@@ -31,8 +31,8 @@ class DocumentModel : public QAbstractListModel
 public:
     enum Role {
         DocumentIdRole = Qt::UserRole + 1,
-        FolderIdRole,
-        TitleRole,
+        ParentIdRole,
+        NameRole,
         ByteSizeRole,
         RevisionRole,
         ControlledRole
@@ -47,7 +47,7 @@ public:
     QVariantMap errorDetails() const { return m_errorDetails.toVariantMap(); }
     QString currentDocumentId() const { return m_currentDocumentId; }
     int revisionOf(const QString &documentId) const;
-    QString titleOf(const QString &documentId) const;
+    QString nameOf(const QString &documentId) const;
     bool controlledOf(const QString &documentId) const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -60,7 +60,8 @@ public:
     /// Saves the current version of the document, or `versionId` of it.
     void download(const QString &documentId, const QString &versionId = {});
     void move(const QString &documentId, const QString &folderId, int revision);
-    void rename(const QString &documentId, const QString &title, int revision);
+    void rename(const QString &documentId, const QString &name, int revision);
+    /// Moves the document to the trash, where Core holds it at its new revision.
     void trash(const QString &documentId, int revision);
     /// Not busy any more, failed with `errorCode` (none when empty).
     void settle(const QString &errorCode = QString());

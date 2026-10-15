@@ -12,7 +12,7 @@ const SPACE = {
     spaces: [{
       name: "Docs",
       folders: [{ name: "Archive" }, { name: "Contracts" }],
-      documents: [{ title: "Notes", content: "notes body" }, { title: "Budget", content: "budget body" }],
+      documents: [{ name: "Notes", content: "notes body" }, { name: "Budget", content: "budget body" }],
     }],
   }],
 };
@@ -94,7 +94,7 @@ module.exports = (scenario) => {
       for (const file of files) {
         const doc = await core.document(file.name);
         assert.equal(doc.content_sha256, sha256(file.buffer), file.name);
-        assert.equal(doc.folder_id, contracts, file.name);
+        assert.equal(doc.parent_id, contracts, file.name);
       }
     }, { load: false });
 
@@ -110,7 +110,7 @@ module.exports = (scenario) => {
     for (const file of files)
       assert.equal(await landed(core, file.name), sha256(file.buffer), file.name);
     const archive = (await core.folder("Archive")).id;
-    assert.equal((await core.document("drop.bin")).folder_id, archive);
+    assert.equal((await core.document("drop.bin")).parent_id, archive);
   });
 
   scenario("3.4", "the status line counts the files on the wire", DESKTOP, async ({ studio, core }) => {
@@ -242,7 +242,7 @@ module.exports = (scenario) => {
       assert.equal((await studio.focus()).text, "Archive");
     });
 
-  // A folder has no trash: the toolbar deletes it for good once confirmed.
+  // A folder goes to the trash with what it holds, after its panel asks.
   scenario("3.8", "trash by Del, the menu, and the toolbar", DESKTOP, async ({ studio, core }) => {
     await core.seed(SPACE);
     await studio.enter("Acme", "Docs");
@@ -263,7 +263,7 @@ module.exports = (scenario) => {
     await studio.untilNames(["Archive"]);
     const { folders, trash: trashed } = await core.state();
     assert.deepEqual(folders.map((folder) => folder.name), ["Archive"]);
-    assert.equal(trashed.length, 2);
+    assert.equal(trashed.length, 3);
   });
 
   // Ctrl+Z is the browser's undo only inside editable DOM; the canvas's
@@ -293,7 +293,7 @@ module.exports = (scenario) => {
       assert.ok(!(await core.document("Notes")));
 
       await trash(studio, core, "Budget");
-      await core.fail({ method: "POST", path: "/purge$", status: 500 });
+      await core.fail({ method: "DELETE", path: "/items/[^/]+$", status: 500 });
       await studio.runFromSheet("purge");
       await studio.untilStatus(MESSAGES.server);
       assert.equal((await core.state()).trash.length, 1);
@@ -323,7 +323,7 @@ module.exports = (scenario) => {
     await studio.untilNames(["Notes"]);
     await studio.untilSession("hasClipboard", false);
     const contracts = (await core.folder("Contracts")).id;
-    assert.equal((await core.document("Notes")).folder_id, contracts);
+    assert.equal((await core.document("Notes")).parent_id, contracts);
     if (studio.touch)
       return;
 
@@ -336,7 +336,7 @@ module.exports = (scenario) => {
     await page.evaluate(() => navigator.clipboard.writeText("copied earlier"));
     await studio.press("Control+v");
     await studio.untilNames(["Notes", "Budget"]);
-    assert.equal((await core.document("Budget")).folder_id, contracts);
+    assert.equal((await core.document("Budget")).parent_id, contracts);
   }, { context: { permissions: ["clipboard-read", "clipboard-write"] } });
 
   scenario("3.11", "Ctrl+V pastes the cut row when the browser clipboard is empty", DESKTOP,
@@ -358,7 +358,7 @@ module.exports = (scenario) => {
     await studio.enter("Acme", "Docs");
     await studio.drag(studio.row("Notes"), studio.row("Contracts"));
     await studio.untilListed("Notes", false);
-    assert.equal((await core.document("Notes")).folder_id, (await core.folder("Contracts")).id);
+    assert.equal((await core.document("Notes")).parent_id, (await core.folder("Contracts")).id);
   });
 
   scenario("3.12", "a row dragged onto a tree node or a crumb moves there", DESKTOP, async ({ studio, core }) => {

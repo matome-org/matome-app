@@ -57,7 +57,10 @@ WebAssembly build under `build-tests/web-e2e`, then checks that the shipped
 starts from a clean APK install and its own FakeCore on a free port, reached
 through `10.0.2.2`. It uses the app's accessible names and Android's real
 DocumentsUI file picker. It builds and installs the APK, boots the emulator
-when needed, and restores device settings changed by the scenarios.
+when needed, and restores device settings changed by the scenarios. The
+emulator runs with `-gpu host`, so a run needs a display (`DISPLAY` or
+`WAYLAND_DISPLAY`); a run without one, or an emulator that exits while
+booting, fails with the end of `/tmp/matome-emulator.log`.
 
 `test:e2e` runs all three platform suites. The mobile suite requires the
 Android toolchain. In the browser, Qt's WebAssembly accessibility exposes

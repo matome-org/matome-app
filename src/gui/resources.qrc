@@ -105,19 +105,21 @@
         <file>qml/chrome/Scroll.js</file>
         <file>qml/chrome/BarRule.qml</file>
         <file>qml/chrome/CommandBar.qml</file>
-        <file>qml/chrome/ListRow.qml</file>
         <file>qml/chrome/SectionHead.qml</file>
         <file>qml/chrome/Table.qml</file>
         <file>qml/chrome/Tile.qml</file>
         <file>qml/chrome/TileGrid.qml</file>
         <file>qml/chrome/ViewTab.qml</file>
+        <file>qml/chrome/SegmentedSwitch.qml</file>
         <file>qml/chrome/DetailPage.qml</file>
         <file>qml/chrome/DetailTab.qml</file>
         <file>qml/documents/DocumentScreen.qml</file>
-        <file>qml/documents/DiffView.qml</file>
+        <file>qml/documents/ChangesTab.qml</file>
+        <file>qml/documents/GlideList.qml</file>
+        <file>qml/documents/Marks.js</file>
+        <file>qml/documents/SourceDiff.qml</file>
         <file>qml/documents/MarkdownEditor.qml</file>
         <file>qml/documents/MarkdownView.qml</file>
-        <file>qml/documents/PinnedImage.qml</file>
         <file>qml/documents/LinkSuggestions.qml</file>
         <file>qml/controlled_docs/ReviewList.qml</file>
         <file>qml/controlled_docs/ReviewPage.qml</file>

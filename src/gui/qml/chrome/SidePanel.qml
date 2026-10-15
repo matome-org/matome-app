@@ -7,8 +7,9 @@ import matome
 
 // A pane that slides in at the right edge of this item, beside the list it
 // edits from; it covers the whole width when `narrow`. A title over a
-// subtitle, the children in a scrolling body, then Cancel and, with a
-// `saveText`, the step that saves. It sits in the window's popup layer, so
+// subtitle, the children in a scrolling body, then Cancel, with an
+// `otherText` a second way out (`otherRequested`), and, with a `saveText`,
+// the step that saves. It sits in the window's popup layer, so
 // a press on it never reaches the list beneath, yet the list stays usable
 // beside it. Opening moves focus in (`initialFocus`, else the first control
 // of the body); closing returns it to the item `open` was given. Esc and
@@ -23,6 +24,7 @@ Item {
     property string saveText
     property bool saveUsable: true
     property string cancelText: qsTr("Cancel")
+    property string otherText
     property bool narrow: false
     property Item initialFocus: null
     // Steps back inside the pane, such as out of a confirmation; true when it did.
@@ -37,6 +39,7 @@ Item {
     property real shift: panel.shown ? 0 : 1
 
     signal saveRequested()
+    signal otherRequested()
     signal closed()
 
     function open(returnTo) {
@@ -154,6 +157,12 @@ Item {
                         objectName: "sidePanelCancel"
                         text: panel.cancelText
                         onActivated: panel.dismiss()
+                    }
+                    ActionButton {
+                        objectName: "sidePanelOther"
+                        visible: panel.otherText !== ""
+                        text: panel.otherText
+                        onActivated: panel.otherRequested()
                     }
                     ActionButton {
                         objectName: "sidePanelSave"

@@ -46,7 +46,32 @@ QJsonObject byId(const QJsonArray &rows, const QString &id)
     return {};
 }
 
+// Whether Core's `assignable` of `role` names `scope`: "organization" for
+// a role given across the organization, "resource" for one granted on a place.
+bool assignsTo(const QJsonObject &role, const QString &scope)
+{
+    return role.value(QStringLiteral("assignable")).toArray().contains(QJsonValue(scope));
+}
+
+// A place-only role works only granted on a place: Core reads its actions
+// from a grant there and gives nothing across the organization.
+bool isPlaceOnly(const QJsonObject &role)
+{
+    return assignsTo(role, QStringLiteral("resource")) && !assignsTo(role, QStringLiteral("organization"));
+}
+
+// Archiving keeps the object listed, read only.
+AddOnBackend::Step archiveStep(const QString &path)
+{
+    return {"PATCH", path, QJsonObject{{QStringLiteral("status"), QStringLiteral("archived")}}};
+}
+
 } // namespace
+
+bool AccessDirectory::placeOnly(const QString &roleId) const
+{
+    return isPlaceOnly(role(roleId));
+}
 
 AccessDirectory::AccessDirectory(Session &session, AddOnBackend &backend)
     : QObject(&session), m_session(session), m_backend(backend)
@@ -96,60 +121,22 @@ QVariantList AccessDirectory::groups() const
     return list;
 }
 
-QHash<QString, QJsonObject> AccessDirectory::described() const
-{
-    QHash<QString, QJsonObject> rows;
-    for (const auto &value : m_session.permissions()->catalog())
-        rows.insert(value.toObject().value(QStringLiteral("key")).toString(), value.toObject());
-    return rows;
-}
-
-// Core reads a grant-bound action only from a grant on the place, so such a
-// role without an organization action does nothing given across the
-// organization.
-bool AccessDirectory::placeOnly(const QJsonObject &role, const QHash<QString, QJsonObject> &described)
-{
-    if (role.value(QStringLiteral("origin")).toString() == QLatin1String("system")
-        && organizationKeys().contains(role.value(QStringLiteral("key")).toString()))
-        return false;
-    bool placed = false;
-    for (const auto &action : role.value(QStringLiteral("actions")).toArray()) {
-        const QJsonObject descriptor = described.value(action.toString());
-        if (descriptor.value(QStringLiteral("axis")).toString() == QLatin1String("organization"))
-            return false;
-        placed = placed || descriptor.value(QStringLiteral("resource_grant")).toBool();
-    }
-    return placed;
-}
-
-bool AccessDirectory::placeOnly(const QString &roleId) const
-{
-    return placeOnly(role(roleId), described());
-}
-
 QVariantList AccessDirectory::roles() const
 {
-    const QHash<QString, QJsonObject> actions = described();
     QVariantList list;
     for (const auto &value : m_roles) {
         const auto role = value.toObject();
-        const bool system = role.value(QStringLiteral("origin")).toString() == QLatin1String("system");
-        const QString key = role.value(QStringLiteral("key")).toString();
-        bool organization = false;
-        for (const auto &action : role.value(QStringLiteral("actions")).toArray())
-            organization = organization || actions.value(action.toString()).value(QStringLiteral("axis")).toString() == QLatin1String("organization");
-        const bool builtInOrganization = system && organizationKeys().contains(key);
-        const bool placed = placeOnly(role, actions);
+        const bool organization = assignsTo(role, QStringLiteral("organization"));
         list.append(QVariantMap{{QStringLiteral("id"), jsonId(role.value(QStringLiteral("id")))},
-                                {QStringLiteral("key"), key},
+                                {QStringLiteral("key"), role.value(QStringLiteral("key")).toString()},
                                 {QStringLiteral("name"), role.value(QStringLiteral("name")).toString()},
                                 {QStringLiteral("actions"), role.value(QStringLiteral("actions")).toArray().toVariantList()},
                                 {QStringLiteral("origin"), role.value(QStringLiteral("origin")).toString()},
                                 {QStringLiteral("custom"), custom(role)},
-                                {QStringLiteral("assignable"), (!system || builtInOrganization) && !placed},
-                                {QStringLiteral("placeOnly"), placed},
-                                {QStringLiteral("appliesTo"), (system ? builtInOrganization : organization)
-                                                                  ? QStringLiteral("organization") : QStringLiteral("space")}});
+                                {QStringLiteral("assignable"), organization},
+                                {QStringLiteral("grantable"), assignsTo(role, QStringLiteral("resource"))},
+                                {QStringLiteral("placeOnly"), isPlaceOnly(role)},
+                                {QStringLiteral("appliesTo"), organization ? QStringLiteral("organization") : QStringLiteral("space")}});
     }
     return list;
 }
@@ -201,10 +188,12 @@ QVariantList AccessDirectory::grantableRoles() const
     QVariantList system, addOn, others;
     for (const QVariant &value : roles()) {
         const QVariantMap row = value.toMap();
+        if (!row.value(QStringLiteral("grantable")).toBool())
+            continue;
         const QString origin = row.value(QStringLiteral("origin")).toString();
-        if (origin == QLatin1String("system") && !row.value(QStringLiteral("assignable")).toBool()) system.append(row);
+        if (origin == QLatin1String("system")) system.append(row);
         else if (origin == QLatin1String("add_on")) addOn.append(row);
-        else if (origin != QLatin1String("system")) others.append(row);
+        else others.append(row);
     }
     // A built-in role Core adds later goes after the ones listed.
     std::stable_sort(system.begin(), system.end(), [](const QVariant &a, const QVariant &b) {
@@ -294,8 +283,7 @@ QString AccessDirectory::resourcePath(const QString &orgId, const QString &kind,
         return orgPath(orgId, QStringLiteral("tags/%1/%2").arg(id, leaf));
     if (kind == QLatin1String("space"))
         return contentPath(orgId, spaceId, leaf);
-    return contentPath(orgId, spaceId, QStringLiteral("%1/%2/%3")
-                               .arg(kind == QLatin1String("folder") ? QStringLiteral("folders") : QStringLiteral("documents"), id, leaf));
+    return itemPath(orgId, id, leaf);
 }
 
 QString AccessDirectory::principalFieldName(const QString &kind)
@@ -454,7 +442,7 @@ void AccessDirectory::updateRole(const QString &roleId, const QString &name, con
 void AccessDirectory::archiveRole(const QString &roleId)
 {
     if (custom(role(roleId)))
-        change({{"POST", QStringLiteral("roles/%1/archive").arg(roleId), {}}}, QStringLiteral("role_archived"));
+        change({archiveStep(QStringLiteral("roles/%1").arg(roleId))}, QStringLiteral("role_archived"));
 }
 
 void AccessDirectory::createGroup(const QString &name)
@@ -474,7 +462,7 @@ void AccessDirectory::renameGroup(const QString &groupId, const QString &name)
 void AccessDirectory::archiveGroup(const QString &groupId)
 {
     if (!byId(m_groups, groupId).isEmpty())
-        change({{"POST", QStringLiteral("groups/%1/archive").arg(groupId), {}}}, QStringLiteral("group_archived"));
+        change({archiveStep(QStringLiteral("groups/%1").arg(groupId))}, QStringLiteral("group_archived"));
 }
 
 void AccessDirectory::setGroupMembers(const QString &groupId, const QStringList &membershipIds)
@@ -532,7 +520,7 @@ void AccessDirectory::updateTag(const QString &tagId, const QString &name, bool 
 void AccessDirectory::archiveTag(const QString &tagId)
 {
     if (!byId(m_tags, tagId).isEmpty())
-        change({{"POST", QStringLiteral("tags/%1/archive").arg(tagId), {}}}, QStringLiteral("tag_archived"));
+        change({archiveStep(QStringLiteral("tags/%1").arg(tagId))}, QStringLiteral("tag_archived"));
 }
 
 void AccessDirectory::renameSpace(const QString &spaceId, const QString &name)
@@ -545,6 +533,6 @@ void AccessDirectory::renameSpace(const QString &spaceId, const QString &name)
 void AccessDirectory::archiveSpace(const QString &spaceId)
 {
     if (!spaceId.isEmpty())
-        change({{"POST", QStringLiteral("spaces/%1/archive").arg(spaceId), {}}}, QStringLiteral("space_archived"));
+        change({archiveStep(QStringLiteral("spaces/%1").arg(spaceId))}, QStringLiteral("space_archived"));
 }
 }

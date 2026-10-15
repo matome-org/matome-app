@@ -12,7 +12,7 @@ class Session;
 
 /// Who holds one role of the current organization, for its page in
 /// Settings: the people and groups it is given to across the organization,
-/// and the grants of it on spaces, folders, documents, and tags whose access
+/// and the grants of it on spaces, items, and tags whose access
 /// the signed-in person may read. It gives the role to more people and
 /// groups, across the organization or in a space, and takes it back.
 class RoleHolders : public QObject
@@ -41,8 +41,7 @@ public:
     /// both, and `principal` "user:<membership>", "group:<id>", or, on a
     /// tag, "role:<id>" whose key is `principalKey`.
     /// A grant also carries its place: `{resourceKind, resourceId, spaceId,
-    /// name, spaceName}`, `resourceKind` one of "space", "folder",
-    /// "document", and "tag".
+    /// name, spaceName}`, `resourceKind` one of "space", "item", and "tag".
     QVariantList holders() const;
     /// The principals the role is given to across the organization.
     QStringList assigned() const;

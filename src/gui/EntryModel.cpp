@@ -100,7 +100,7 @@ void EntryModel::refresh()
             const QString bytes = at.data(DocumentModel::ByteSizeRole).toString();
             const QString detail = bytes.isEmpty() ? QString() : locale.formattedDataSize(bytes.toLongLong());
             const bool controlled = at.data(DocumentModel::ControlledRole).toBool();
-            add(rows, QStringLiteral("document"), id, at.data(DocumentModel::TitleRole).toString(),
+            add(rows, QStringLiteral("document"), id, at.data(DocumentModel::NameRole).toString(),
                 detail, -1,
                 QStringLiteral("document:%1:%2")
                         .arg(id)

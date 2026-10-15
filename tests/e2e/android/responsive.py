@@ -7,7 +7,7 @@ from app import ACME, App, scenario
 from device import Screen, expect
 
 LONG = {"organizations": [{"name": "Acme", "spaces": [{"name": "Inbox", "documents": [
-    {"title": "Row", "repeat": 30}]}]}]}
+    {"name": "Row", "repeat": 30}]}]}]}
 
 
 @scenario("5.1", title="the drawer opens from its button and closes on the scrim and on Back")
@@ -142,8 +142,8 @@ def soft_keyboard(app: App) -> None:
     d.setting("secure", "show_ime_with_hard_keyboard", "1")
     d.tap("filterButton")
     clear_of_keyboard("filterField")
-    # A tap on a row takes focus off the empty filter, which closes.
-    d.tap(app.row("Row 001"))
+    # Escape leaves the empty filter, which closes.
+    d.key("KEYCODE_ESCAPE")
     d.showing("filterButton")
     screen = d.dump()
     bottom = screen.get("entryList").box[3]

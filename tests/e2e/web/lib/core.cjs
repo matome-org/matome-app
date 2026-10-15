@@ -31,8 +31,8 @@ class Core {
   release() { return this.call("POST", "release"); }
   state() { return this.call("GET", "state"); }
 
-  async document(title) {
-    return (await this.state()).documents.find((doc) => doc.title === title);
+  async document(name) {
+    return (await this.state()).documents.find((doc) => doc.name === name);
   }
 
   async folder(name) {

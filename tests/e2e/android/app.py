@@ -33,8 +33,8 @@ DARK = {"background": (0x1A, 0x17, 0x14)}
 ACME = {"organizations": [{"name": "Acme", "spaces": [{
     "name": "Inbox",
     "folders": [{"name": "Docs", "folders": [{"name": "Deep"}],
-                 "documents": [{"title": "a.txt", "content": "alpha"}]}],
-    "documents": [{"title": "root.txt", "content": "root bytes"}]}]}]}
+                 "documents": [{"name": "a.txt", "content": "alpha"}]}],
+    "documents": [{"name": "root.txt", "content": "root bytes"}]}]}]}
 OWN_ORG = "ok organization"
 ORGS = ["Acme", OWN_ORG]
 EMPTY_FOLDER = "This folder is empty.\nCreate a folder or drop files here."
